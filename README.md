@@ -1,0 +1,151 @@
+# MACP auth-service
+
+JWT-minting identity service for the MACP runtime. Implements RFC-MACP-0004 §4
+(direct-agent-auth) as a dedicated identity provider so that spawned agents can
+authenticate directly to the runtime with short-lived RS256 bearer tokens.
+
+## Role in the stack
+
+```
+  examples-service ──POST /tokens──► auth-service :3200 ──┐
+  control-plane    ──POST /tokens──► auth-service :3200   │
+                                                          │  public keys
+  macp-runtime (gRPC) ◄──GET /.well-known/jwks.json───────┘  cached 60s
+                                                             for JWT verify
+```
+
+- **Minting:** `examples-service` calls `POST /tokens` once per agent it spawns,
+  passing `sender` + scopes. The returned JWT is written into the agent's
+  bootstrap payload (`runtime.bearerToken`). The agent then presents that
+  bearer directly to the runtime's gRPC endpoint.
+- **Verification:** the runtime is configured with
+  `MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json`. It
+  fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
+  incoming JWT's signature + `iss` + `aud` + `exp` + `nbf` on each gRPC frame.
+
+This service is *not* in the hot path of a running session — tokens are minted
+once per agent at scenario launch, then reused for the session lifetime.
+
+## API
+
+### `GET /healthz`
+
+Liveness probe. Returns `{ "ok": true }` with HTTP 200.
+
+### `GET /.well-known/jwks.json`
+
+Returns the public JWKS (private material is never exposed here).
+
+```json
+{
+  "keys": [{
+    "kty": "RSA", "alg": "RS256", "use": "sig", "kid": "dev-key-1",
+    "n": "…", "e": "AQAB"
+  }]
+}
+```
+
+### `POST /tokens`
+
+Mint a JWT.
+
+Request:
+
+```json
+{
+  "sender": "risk-agent",
+  "scopes": {
+    "can_start_sessions": true,
+    "is_observer": false,
+    "allowed_modes": ["macp.mode.decision.v1", ""],
+    "max_open_sessions": 1,
+    "can_manage_mode_registry": false
+  },
+  "ttl_seconds": 3600
+}
+```
+
+- `sender` (required) — becomes the JWT `sub` claim and the authenticated
+  identity the runtime associates with incoming frames.
+- `scopes` (optional) — serialized verbatim under the `macp_scopes` claim.
+- `ttl_seconds` (optional) — clamped by `MACP_AUTH_MAX_TTL_SECONDS`. Defaults
+  to `MACP_AUTH_DEFAULT_TTL_SECONDS` when omitted.
+
+Response:
+
+```json
+{
+  "token": "eyJhbGciOi…",
+  "sender": "risk-agent",
+  "expires_in_seconds": 3600
+}
+```
+
+Errors:
+- `400` `{"error":"sender is required"}` if `sender` is missing or empty.
+- `400` `{"error":"ttl_seconds must be a positive number"}` if `ttl_seconds` is
+  non-positive or non-finite.
+
+## Configuration
+
+See `.env.example` for the complete reference. Minimum in production:
+
+| Variable | Default | Required? | Notes |
+|---|---|---|---|
+| `PORT` | `3200` | no | HTTP listen port |
+| `MACP_AUTH_ISSUER` | `macp-auth-service` | no | JWT `iss`. Must match runtime's expected issuer. |
+| `MACP_AUTH_AUDIENCE` | `macp-runtime` | no | JWT `aud`. Must match runtime's expected audience. |
+| `MACP_AUTH_MAX_TTL_SECONDS` | `3600` | no | Upper bound on minted token lifetime. |
+| `MACP_AUTH_DEFAULT_TTL_SECONDS` | `300` | no | Applied when request omits `ttl_seconds`. |
+| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | RSA private JWK. If unset, generates an ephemeral keypair on startup (dev only — keys rotate on every restart). |
+
+### Generating a production signing key
+
+```bash
+node -e "const {generateKeyPair, exportJWK} = require('jose'); \
+  (async () => { \
+    const { privateKey } = await generateKeyPair('RS256', { extractable: true }); \
+    const jwk = await exportJWK(privateKey); \
+    jwk.kid = 'prod-key-1'; \
+    console.log(JSON.stringify(jwk)); \
+  })();"
+```
+
+Set the output as `MACP_AUTH_SIGNING_KEY_JSON`. Rotate by generating a new
+key with a fresh `kid` and redeploying; the runtime's JWKS cache refreshes
+within `MACP_AUTH_JWKS_TTL_SECS`.
+
+## Development
+
+```bash
+npm install          # one-time
+npm run dev          # ts-node watch (not restart)
+npm test             # jest — unit + HTTP integration via supertest
+npm run test:coverage
+npm run build        # compile to dist/
+npm start            # run the compiled build
+npm run typecheck    # tsc --noEmit
+```
+
+## Docker
+
+```bash
+docker build -t macp-auth-service:local .
+docker run --rm -p 3200:3200 macp-auth-service:local
+curl http://localhost:3200/healthz
+```
+
+The published CI image is `ghcr.io/multiagentcoordinationprotocol/auth-service`
+(see `.github/workflows/docker.yml`).
+
+## Security notes
+
+- **`POST /tokens` has no client authentication in this implementation.** It
+  assumes a trusted intra-cluster network. If the service is reachable from
+  anywhere else, put it behind mTLS / a reverse proxy that authenticates
+  callers, or add a shared-secret `Authorization` header check. Anyone who
+  can hit `/tokens` today can mint a JWT for any `sender`.
+- Run with `MACP_AUTH_SIGNING_KEY_JSON` supplied by a secret store
+  (Kubernetes Secret, Vault, etc.) in any shared environment.
+- Container runs as a non-root user and exposes an HTTP healthcheck; no
+  extra runtime privileges are needed.
