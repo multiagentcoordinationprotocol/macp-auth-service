@@ -1,30 +1,44 @@
 # MACP auth-service
 
 JWT-minting identity service for the MACP runtime. Implements RFC-MACP-0004 §4
-(direct-agent-auth) as a dedicated identity provider so that spawned agents can
-authenticate directly to the runtime with short-lived RS256 bearer tokens.
+(direct-agent-auth) as a dedicated identity provider so that SDK-based agents
+can authenticate directly to the runtime with short-lived RS256 bearer tokens.
 
 ## Role in the stack
 
 ```
-  examples-service ──POST /tokens──► auth-service :3200 ──┐
-  control-plane    ──POST /tokens──► auth-service :3200   │
-                                                          │  public keys
-  macp-runtime (gRPC) ◄──GET /.well-known/jwks.json───────┘  cached 60s
-                                                             for JWT verify
+  control-plane        ──POST /tokens──► auth-service :3200 ──┐
+  SDK orchestrators    ──POST /tokens──► auth-service :3200   │
+                                                              │  public keys
+  macp-runtime (gRPC) ◄────GET /.well-known/jwks.json─────────┘  cached per
+                                                                 MACP_AUTH_JWKS_TTL_SECS
+
+  SDK agents (TS / Python) ──Authorization: Bearer <JWT>──► macp-runtime (gRPC)
 ```
 
-- **Minting:** `examples-service` calls `POST /tokens` once per agent it spawns,
-  passing `sender` + scopes. The returned JWT is written into the agent's
-  bootstrap payload (`runtime.bearerToken`). The agent then presents that
-  bearer directly to the runtime's gRPC endpoint.
+- **Minting:** the [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane)
+  (or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/typescript-sdk)
+  or [Python SDK](https://github.com/multiagentcoordinationprotocol/python-sdk))
+  calls `POST /tokens` once per agent it spawns, passing `sender` + scopes.
+  The returned JWT is handed to the agent in its bootstrap payload under
+  `runtime.bearerToken`.
+- **Bearer presentation:** SDK-based agents load the bearer from bootstrap
+  and present it as `Authorization: Bearer <JWT>` on every gRPC call to the
+  runtime. See the SDK auth guides
+  ([TypeScript](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/authentication.md),
+  [Python](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/direct-agent-auth.md)).
 - **Verification:** the runtime is configured with
   `MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json`. It
   fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
-  incoming JWT's signature + `iss` + `aud` + `exp` + `nbf` on each gRPC frame.
+  incoming JWT's signature + `iss` + `aud` + `exp` on each gRPC frame. See
+  the runtime
+  [Getting Started](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/getting-started.md#jwt-mode)
+  and
+  [Deployment](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/deployment.md#authentication)
+  guides.
 
 This service is *not* in the hot path of a running session — tokens are minted
-once per agent at scenario launch, then reused for the session lifetime.
+once per agent at provisioning time, then reused for the session lifetime.
 
 ## API
 
@@ -137,6 +151,19 @@ curl http://localhost:3200/healthz
 
 The published CI image is `ghcr.io/multiagentcoordinationprotocol/auth-service`
 (see `.github/workflows/docker.yml`).
+
+## Documentation
+
+Full documentation lives under [`docs/`](docs/README.md):
+
+| Page | Purpose |
+|------|---------|
+| [Getting Started](docs/getting-started.md) | Install, run locally, mint your first token, verify against JWKS |
+| [Integration Guide](docs/integration.md) | End-to-end wiring with the control-plane, SDK orchestrators, SDK agents, and the runtime |
+| [Architecture](docs/architecture.md) | Module layout, request flow, key lifecycle, design goals |
+| [API Reference](docs/API.md) | All three HTTP endpoints, JWT claim structure, error table |
+| [Deployment](docs/deployment.md) | Production checklist, env vars, Docker, Kubernetes, TLS termination |
+| [Operations Runbook](docs/operations.md) | Key rotation, diagnostics, common failures, incident response |
 
 ## Security notes
 
