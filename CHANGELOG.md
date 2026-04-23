@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/` directory with long-form documentation: `README.md` (index),
+  `getting-started.md`, `integration.md`, `architecture.md`, `API.md`,
+  `deployment.md`, and `operations.md`. Style and structure match the
+  `runtime/docs` layout so the website can pick both up with the same sync.
+  The integration and index pages call out both minter consumers
+  (control-plane, SDK-based orchestrators) and bearer consumers
+  (TS + Python SDK agents), with cross-links to the corresponding
+  control-plane, SDK, and runtime auth docs.
+- `.github/workflows/notify-website.yml` — on push to `main` with changes
+  under `docs/**` or to `README.md`, dispatches a `docs-updated` event to
+  `multiagentcoordinationprotocol/website`.
 - Testable factory — `createApp(config, signing)` exported from `src/server.ts`
   so supertest can exercise the HTTP surface without opening a port.
 - Jest + supertest unit/integration tests covering `/healthz`,
