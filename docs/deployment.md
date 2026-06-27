@@ -25,13 +25,14 @@ Before exposing the auth-service to production traffic, confirm these five items
 | `MACP_AUTH_AUDIENCE` | `macp-runtime` | no | JWT `aud` claim. Must match the verifier's expected audience. |
 | `MACP_AUTH_MAX_TTL_SECONDS` | `3600` | no | Upper bound on minted token lifetime. Clients requesting more are clamped down. |
 | `MACP_AUTH_DEFAULT_TTL_SECONDS` | `300` | no | TTL applied when the request omits `ttl_seconds`. |
-| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | RSA private JWK as a JSON string. See below for generation. |
+| `MACP_AUTH_SIGNING_ALG` | `RS256` | no | Signature algorithm: `RS256` (RSA) or `ES256` (EC P-256). The runtime accepts either. An unsupported value fails startup. |
+| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | Private JWK as a JSON string, matching `MACP_AUTH_SIGNING_ALG` (RSA for `RS256`, EC P-256 for `ES256`). See below for generation. |
 
 Environment variables are read by `src/config.ts` via `loadConfigFromEnv()`. No other file reads `process.env`. This means a single command with the right env applies globally; there are no per-request overrides.
 
 ## Signing key generation
 
-Generate an RSA keypair as a JWK once, store the private JWK in your secret manager, and inject it at process start.
+Generate a keypair as a JWK once, store the private JWK in your secret manager, and inject it at process start. The snippet below produces an RSA key for the default `RS256`; for `MACP_AUTH_SIGNING_ALG=ES256`, swap both `'RS256'` literals for `'ES256'` and the output is an EC P-256 JWK (`kty: "EC"`).
 
 ```bash
 node -e "const {generateKeyPair,exportJWK}=require('jose'); \
@@ -42,7 +43,7 @@ node -e "const {generateKeyPair,exportJWK}=require('jose'); \
   console.log(JSON.stringify(jwk))})()"
 ```
 
-The `kid` should be unique per key version. Embedding the generation date (`prod-key-2026-04-22`) is a reasonable convention — it makes rotation history visible at a glance in logs and verifier caches.
+The JWK's key type must match `MACP_AUTH_SIGNING_ALG`. The `kid` should be unique per key version. Embedding the generation date (`prod-key-2026-04-22`) is a reasonable convention — it makes rotation history visible at a glance in logs and verifier caches.
 
 Store the output in your secret manager as a single string. Do **not** commit the JWK; do **not** log it; do **not** pipe it through a console that retains scrollback on a shared host.
 
@@ -93,7 +94,7 @@ curl http://localhost:3200/healthz
 
 ### Published images
 
-CI publishes to `ghcr.io/multiagentcoordinationprotocol/auth-service`. PR builds are tagged `pr-<n>`. Merges to `main` are tagged `latest` and `sha-<7hex>`. See `.github/workflows/docker.yml` for the exact tagging strategy.
+CI publishes to `ghcr.io/multiagentcoordinationprotocol/macp-auth-service`. PR builds are tagged `pr-<n>`. Merges to `main` are tagged `latest` and `sha-<7hex>`. See `.github/workflows/docker.yml` for the exact tagging strategy.
 
 ### Recommended runtime configuration
 
@@ -107,7 +108,7 @@ docker run -d \
   -e MACP_AUTH_MAX_TTL_SECONDS=3600 \
   -e MACP_AUTH_SIGNING_KEY_JSON="$(cat /run/secrets/signing-key.json)" \
   -p 127.0.0.1:3200:3200 \
-  ghcr.io/multiagentcoordinationprotocol/auth-service:latest
+  ghcr.io/multiagentcoordinationprotocol/macp-auth-service:latest
 ```
 
 The `--read-only` flag is safe because the service writes nothing to disk. Binding to `127.0.0.1` ensures only local callers (or a reverse proxy on the same host) can reach the mint endpoint.
@@ -131,7 +132,7 @@ spec:
     spec:
       containers:
         - name: auth
-          image: ghcr.io/multiagentcoordinationprotocol/auth-service:sha-abc1234
+          image: ghcr.io/multiagentcoordinationprotocol/macp-auth-service:sha-abc1234
           ports:
             - containerPort: 3200
           env:
@@ -184,7 +185,7 @@ The runtime fetches the JWKS on first use and caches it for `MACP_AUTH_JWKS_TTL_
 - `aud` matches `MACP_AUTH_AUDIENCE`.
 - `exp` is in the future (within tolerable clock skew).
 
-See the [runtime Getting Started guide](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/getting-started.md#jwt-mode) for the full JWT configuration reference on the runtime side.
+See the [runtime Getting Started guide](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode) for the full JWT configuration reference on the runtime side.
 
 ## TLS termination
 

@@ -10,7 +10,7 @@ For protocol-level transport semantics and the JWT claim model, see the [protoco
 |--------|------|---------|------|
 | `GET` | `/healthz` | Liveness probe | none |
 | `GET` | `/.well-known/jwks.json` | Public JWKS for JWT verification | none |
-| `POST` | `/tokens` | Mint a short-lived RS256 JWT | **none by default** (see [Deployment](deployment.md)) |
+| `POST` | `/tokens` | Mint a short-lived JWT (RS256 by default, or ES256) | **none by default** (see [Deployment](deployment.md)) |
 
 All responses are `application/json`. All requests that carry a body must use `content-type: application/json`.
 
@@ -61,14 +61,14 @@ Returns the public JWKS document that verifiers (typically the MACP runtime) fet
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kty` | string | Key type. Always `RSA` for this service. |
-| `n` | string | base64url-encoded RSA modulus |
-| `e` | string | base64url-encoded RSA exponent (typically `AQAB`) |
+| `kty` | string | Key type. `RSA` for RS256 (the default); `EC` for ES256. |
+| `n` / `e` | string | RSA modulus / exponent — present for `RSA` keys (RS256). |
+| `x` / `y` / `crv` | string | EC coordinates and curve (`P-256`) — present instead for `EC` keys (ES256). |
 | `kid` | string | Key identifier. `dev-key-1` for ephemeral keys; whatever was set in the JWK for pinned keys. |
-| `alg` | string | Signature algorithm. Always `RS256`. |
+| `alg` | string | Signature algorithm: `RS256` by default, or `ES256` when `MACP_AUTH_SIGNING_ALG=ES256`. Matches the minted tokens' header. |
 | `use` | string | Key usage. Always `sig`. |
 
-The service publishes exactly one key at any given time. Rotating keys means replacing the JWK, redeploying, and waiting `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh. See [Operations — Key rotation](operations.md#key-rotation).
+The example above shows the default RSA key; with `MACP_AUTH_SIGNING_ALG=ES256` the entry is an EC P-256 key (`"kty":"EC","crv":"P-256","x":…,"y":…`). The service publishes exactly one key at any given time. Rotating keys means replacing the JWK, redeploying, and waiting `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh. See [Operations — Key rotation](operations.md#key-rotation).
 
 **Example**
 
@@ -80,7 +80,7 @@ curl -sS http://localhost:3200/.well-known/jwks.json | jq .
 
 ### `POST /tokens`
 
-Mints an RS256-signed JWT for the requested `sender` with the supplied scopes and TTL. The returned token can be presented as a gRPC `Authorization: Bearer <token>` header to the MACP runtime.
+Mints a signed JWT (RS256 by default, or ES256 when `MACP_AUTH_SIGNING_ALG=ES256`) for the requested `sender` with the supplied scopes and TTL. The returned token can be presented as a gRPC `Authorization: Bearer <token>` header to the MACP runtime.
 
 **Request body**
 
@@ -147,7 +147,7 @@ The auth-service does not inspect these fields beyond serializing them — enfor
 | `exp` | `iat + effective_ttl` | Expiration (seconds since epoch). |
 | `macp_scopes` | request `scopes` | Capability flags, serialized verbatim. |
 
-The JWT header always carries `alg: RS256` and `kid` matching the key advertised in the JWKS.
+The JWT header carries the configured `alg` (`RS256` by default, or `ES256`) and a `kid` matching the key advertised in the JWKS.
 
 **Example**
 

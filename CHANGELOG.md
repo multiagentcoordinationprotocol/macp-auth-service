@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `MACP_AUTH_SIGNING_ALG` (`RS256` default, or `ES256`) to select the signature
+  algorithm. `ES256` mints with an EC P-256 key; the JWKS advertises the matching
+  `kty: "EC"` public key. The runtime verifier already accepts RS256/ES256/HS256,
+  so this is additive and backward compatible. Invalid values fail fast at startup.
+- `src/contract.spec.ts` — cross-service contract test that pins the exact
+  `macp_scopes` field set and JWT claim shape the runtime's `MACPClaims` /
+  `MACPScopes` structs deserialize, run across both RS256 and ES256. Guards
+  against silent wire-contract drift between auth-service, runtime, control-plane,
+  and examples-service.
+
 - `docs/` directory with long-form documentation: `README.md` (index),
   `getting-started.md`, `integration.md`, `architecture.md`, `API.md`,
   `deployment.md`, and `operations.md`. Style and structure match the

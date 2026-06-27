@@ -4,15 +4,15 @@ This guide is for engineers wiring the auth-service into a larger MACP deploymen
 
 For the architectural rationale behind direct-agent-auth, see RFC-MACP-0004 §4 and the [protocol security documentation](https://www.multiagentcoordinationprotocol.io/docs/security). For companion views from the other side of the wire, see:
 
-- [Runtime — JWT mode](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/getting-started.md#jwt-mode) and [Runtime — Deployment › Authentication](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/deployment.md#authentication) — how the runtime verifies tokens this service issues.
-- [Control-plane — Integration](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/INTEGRATION.md) and [Control-plane — Architecture](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/ARCHITECTURE.md) — how the reference orchestrator mints tokens and hands them to agents.
-- [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/authentication.md) and [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/direct-agent-auth.md) — how SDK agents consume a minted JWT.
+- [Runtime — JWT mode](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode) and [Runtime — Deployment › Authentication](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#authentication) — how the runtime verifies tokens this service issues.
+- [Control-plane — Integration](https://github.com/multiagentcoordinationprotocol/macp-control-plane/blob/main/docs/INTEGRATION.md) and [Control-plane — Architecture](https://github.com/multiagentcoordinationprotocol/macp-control-plane/blob/main/docs/ARCHITECTURE.md) — how the reference orchestrator mints tokens and hands them to agents.
+- [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript/blob/main/docs/guides/authentication.md) and [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/macp-sdk-python/blob/main/docs/guides/direct-agent-auth.md) — how SDK agents consume a minted JWT.
 
 ## Two roles, one identity provider
 
 Anything that talks to the auth-service plays exactly one of these two roles.
 
-**Minters** call `POST /tokens`. They hold a trust relationship with the auth-service (typically intra-cluster network, optionally reinforced by a proxy-level auth check) and are authorised to issue identities to agents. In the reference stack, the [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane) is the primary minter. Any orchestrator built directly on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/typescript-sdk) or [Python SDK](https://github.com/multiagentcoordinationprotocol/python-sdk) can mint the same way — the SDKs ship with sample provisioning paths but do not themselves call `POST /tokens`.
+**Minters** call `POST /tokens`. They hold a trust relationship with the auth-service (typically intra-cluster network, optionally reinforced by a proxy-level auth check) and are authorised to issue identities to agents. In the reference stack, the [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane) is the primary minter. Any orchestrator built directly on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript) or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python) can mint the same way — the SDKs ship with sample provisioning paths but do not themselves call `POST /tokens`.
 
 **Bearers** present a minted JWT to the runtime on every gRPC frame. SDK-based agents are the canonical bearers: they load `runtime.bearerToken` from their bootstrap payload, wrap it in `Auth.bearer(...)` / `AuthConfig.for_bearer(...)`, and let the SDK attach it as `Authorization: Bearer <JWT>` metadata on every RPC. Bearers never touch the auth-service directly — their only relationship with it is indirect, via the `iss` / `aud` / `kid` on the tokens they carry.
 
@@ -74,7 +74,7 @@ The auth-service is **not** in the hot path of a running session. Tokens are min
 
 ### Pattern 1: control-plane provisions an agent
 
-The [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane) is invoked by a human operator, a CI pipeline, or an upstream orchestration system. It enforces its own authorization policy, mints a scoped token for the target agent, and hands the bootstrap payload to the agent runner. This is the primary minting path in the reference stack.
+The [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane) is invoked by a human operator, a CI pipeline, or an upstream orchestration system. It enforces its own authorization policy, mints a scoped token for the target agent, and hands the bootstrap payload to the agent runner. This is the primary minting path in the reference stack.
 
 ```typescript
 async function provisionAgent(req: ProvisionRequest, operator: OperatorIdentity): Promise<AgentHandle> {
@@ -105,11 +105,11 @@ async function provisionAgent(req: ProvisionRequest, operator: OperatorIdentity)
 
 The control-plane is also the primary reason `POST /tokens` is unauthenticated at the service itself — operator authorization happens *before* the mint call, in the control-plane's own policy layer. If you deviate from that topology (for example, by exposing the auth-service to a less trusted network), add caller authentication at the reverse proxy.
 
-For the control-plane's own operator-facing surface and integration contract, see [Control-plane INTEGRATION](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/INTEGRATION.md) and [Control-plane ARCHITECTURE](https://github.com/multiagentcoordinationprotocol/control-plane/blob/main/docs/ARCHITECTURE.md).
+For the control-plane's own operator-facing surface and integration contract, see [Control-plane INTEGRATION](https://github.com/multiagentcoordinationprotocol/macp-control-plane/blob/main/docs/INTEGRATION.md) and [Control-plane ARCHITECTURE](https://github.com/multiagentcoordinationprotocol/macp-control-plane/blob/main/docs/ARCHITECTURE.md).
 
 ### Pattern 2: custom orchestrator built on an SDK
 
-When you build an orchestrator directly on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/typescript-sdk) or [Python SDK](https://github.com/multiagentcoordinationprotocol/python-sdk), your orchestrator plays the same minter role as the control-plane: it calls `POST /tokens` per agent, embeds the JWT in the bootstrap payload, then spawns the agent. The SDKs themselves are agent-side libraries — they present tokens but do not mint them.
+When you build an orchestrator directly on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript) or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python), your orchestrator plays the same minter role as the control-plane: it calls `POST /tokens` per agent, embeds the JWT in the bootstrap payload, then spawns the agent. The SDKs themselves are agent-side libraries — they present tokens but do not mint them.
 
 Typical flow for an SDK-based orchestrator:
 
@@ -152,7 +152,7 @@ const bootstrap = {
 spawnAgent(bootstrap);
 ```
 
-The bootstrap contract and the SDK-side consumption pattern are documented in the SDK guides — see [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/authentication.md) and [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/direct-agent-auth.md).
+The bootstrap contract and the SDK-side consumption pattern are documented in the SDK guides — see [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript/blob/main/docs/guides/authentication.md) and [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/macp-sdk-python/blob/main/docs/guides/direct-agent-auth.md).
 
 ### Pattern 3: ad-hoc tooling
 
@@ -192,7 +192,7 @@ const session = new DecisionSession(client, { sessionId, auth });
 // ... agent-specific flow: session.start(...), session.propose(...), etc.
 ```
 
-See [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/authentication.md) for the full auth surface, including per-operation auth, session-level defaults, and the identity guard.
+See [TypeScript SDK — Authentication](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript/blob/main/docs/guides/authentication.md) for the full auth surface, including per-operation auth, session-level defaults, and the identity guard.
 
 ### Python
 
@@ -212,7 +212,7 @@ session = DecisionSession(client, session_id=session_id, auth=auth)
 # ... agent-specific flow ...
 ```
 
-See [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/direct-agent-auth.md) for the initiator/non-initiator distinction, session pre-allocation, and cancellation patterns.
+See [Python SDK — Direct-agent-auth](https://github.com/multiagentcoordinationprotocol/macp-sdk-python/blob/main/docs/guides/direct-agent-auth.md) for the initiator/non-initiator distinction, session pre-allocation, and cancellation patterns.
 
 ### Why `expectedSender` matters
 
@@ -377,6 +377,8 @@ pub fn verify(token: &str, jwks_key: &DecodingKey) -> anyhow::Result<Claims> {
     Ok(data.claims)
 }
 ```
+
+If the auth-service is configured with `MACP_AUTH_SIGNING_ALG=ES256`, construct the validation with `Algorithm::ES256` instead (the runtime allows both). The `jose` snippet above needs no change — it selects the algorithm from the advertised JWKS automatically.
 
 ## Scopes model
 

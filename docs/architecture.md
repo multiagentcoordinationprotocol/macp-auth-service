@@ -63,7 +63,7 @@ request
   → validate ttl (finite, positive)
   → clamp ttl (min(ttl, config.maxTtlSeconds))
   → jose.SignJWT({ macp_scopes: body.scopes ?? {} })
-      .setProtectedHeader({ alg: 'RS256', kid })
+      .setProtectedHeader({ alg: signing.alg, kid })   // RS256 (default) or ES256
       .setSubject(body.sender)
       .setIssuer(config.issuer)
       .setAudience(config.audience)
@@ -85,23 +85,24 @@ Clock skew handling is deliberately simple: `iat` is set to the process's curren
 SigningMaterial {
   privateKey: jose.KeyLike        // signing key, never exposed
   jwks: { keys: [JWK] }           // public JWKS document, served verbatim
+  alg: 'RS256' | 'ES256'         // configured signature algorithm; used in the JWT header
   source: 'ephemeral' | 'env'    // diagnostic only — logged on startup
 }
 ```
 
-There are two paths:
+`loadKey(signingKeyJson, alg)` takes the algorithm from `config.signingAlg` (`MACP_AUTH_SIGNING_ALG`, default `RS256`). `RS256` produces an RSA keypair; `ES256` produces an EC P-256 keypair. The same two paths apply to either algorithm:
 
 ### Ephemeral (dev)
 
-When `MACP_AUTH_SIGNING_KEY_JSON` is unset, `loadKey()` calls `jose.generateKeyPair('RS256')` at startup. It exports the public half as a JWK, tags it with `kid: 'dev-key-1'`, and returns it. The keypair is process-scoped — a restart generates a fresh key, invalidating every outstanding token the previous process signed.
+When `MACP_AUTH_SIGNING_KEY_JSON` is unset, `loadKey()` calls `jose.generateKeyPair(alg)` at startup. It exports the public half as a JWK, tags it with `kid: 'dev-key-1'` and the configured `alg`, and returns it. The keypair is process-scoped — a restart generates a fresh key, invalidating every outstanding token the previous process signed.
 
 Use this only for local iteration. Any verifier that fetched and cached the prior JWKS will fail every token issued after a restart until the cache expires.
 
 ### Pinned (prod)
 
-When `MACP_AUTH_SIGNING_KEY_JSON` is set, `loadKey()` parses it as a JWK, imports the private key, and derives the public JWK by stripping the private component (`d`) and re-importing. The `kid` comes from the JWK itself, falling back to `'key-1'` if absent.
+When `MACP_AUTH_SIGNING_KEY_JSON` is set, `loadKey()` parses it as a JWK, imports the private key, and derives the public JWK by stripping the private component (`d`) and re-importing. Re-importing a JWK without `d` yields a public key, so re-exporting it drops every private field — RSA `p`/`q`/`dp`/`dq`/`qi` or the EC scalar — and the JWKS can never leak private material regardless of what the operator pasted in. The `kid` comes from the JWK itself, falling back to `'key-1'` if absent.
 
-The JWK must be RSA, must contain private fields (`d`, `p`, `q`, `dp`, `dq`, `qi`), and must be compatible with `alg: RS256`. A parse failure or import failure is fatal — `main()` catches the error in `void main().catch(...)` and exits with code 1. This is intentional: a misconfigured key should prevent startup, not silently fall back to ephemeral.
+The JWK's key type must match `MACP_AUTH_SIGNING_ALG`: an RSA private JWK (`d`, `p`, `q`, `dp`, `dq`, `qi`) for `RS256`, or an EC P-256 private JWK (`crv: "P-256"`, `x`, `y`, `d`) for `ES256`. A parse failure, type mismatch, or import failure is fatal — `main()` catches the error in `void main().catch(...)` and exits with code 1. This is intentional: a misconfigured key should prevent startup, not silently fall back to ephemeral. An unsupported `MACP_AUTH_SIGNING_ALG` value is likewise rejected at config load.
 
 ### Rotation
 
@@ -161,7 +162,7 @@ A few capabilities are intentionally absent and should not be added without firs
 
 - **User accounts / password auth.** The auth-service does not know who the caller is. Caller identification is a reverse-proxy concern.
 - **Token revocation.** The service has no store to revoke from. Short TTLs plus key rotation are the only revocation primitives.
-- **Audit logging.** The service does not log mints. An upstream API gateway (or the caller — typically the [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane) or a custom orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/typescript-sdk) or [Python SDK](https://github.com/multiagentcoordinationprotocol/python-sdk)) is responsible for audit.
+- **Audit logging.** The service does not log mints. An upstream API gateway (or the caller — typically the [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane) or a custom orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript) or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python)) is responsible for audit.
 - **Multiple active keys.** `SigningMaterial.jwks` is always a single-entry array. Supporting N active keys would require a key manager, a selector, and a cache-invalidation strategy — all of which belong in a key management service, not here.
 
 If any of these is required for your deployment, the right move is to put a dedicated service in front of this one and keep this one minimal.

@@ -11,6 +11,7 @@ function testConfig(overrides: Partial<AuthServiceConfig> = {}): AuthServiceConf
     audience: 'macp-runtime-test',
     maxTtlSeconds: 3600,
     defaultTtlSeconds: 300,
+    signingAlg: 'RS256',
     ...overrides,
   };
 }
