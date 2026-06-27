@@ -26,14 +26,14 @@ npm --version
 Clone the repository and install dependencies.
 
 ```bash
-git clone https://github.com/multiagentcoordinationprotocol/auth-service.git
-cd auth-service
+git clone https://github.com/multiagentcoordinationprotocol/macp-auth-service.git
+cd macp-auth-service
 npm install
 ```
 
 ### Development server
 
-With no configuration, the service generates an ephemeral RSA keypair on start and listens on `127.0.0.1:3200`. The keypair lives only as long as the process.
+With no configuration, the service generates an ephemeral keypair on start (RSA by default, or EC P-256 when `MACP_AUTH_SIGNING_ALG=ES256`) and listens on `127.0.0.1:3200`. The keypair lives only as long as the process.
 
 ```bash
 npm run dev
@@ -44,7 +44,7 @@ You should see:
 ```
 [auth-service] listening on port 3200
 [auth-service] issuer=macp-auth-service audience=macp-runtime
-[auth-service] key source: ephemeral
+[auth-service] key source: ephemeral alg: RS256
 [auth-service] JWKS: http://localhost:3200/.well-known/jwks.json
 [auth-service] Mint: POST http://localhost:3200/tokens
 ```
@@ -56,13 +56,13 @@ The `key source: ephemeral` line is the signal that you did not provide `MACP_AU
 In production the service requires a pinned signing key so it survives restarts and so the runtime's JWKS cache stays warm. Generate one once, store it in your secret manager, and inject it at process start.
 
 ```bash
-# Generate a production JWK
+# Generate a production JWK (swap 'RS256' for 'ES256' to mint with an EC P-256 key)
 node -e "const {generateKeyPair,exportJWK}=require('jose'); \
   (async()=>{const {privateKey}=await generateKeyPair('RS256',{extractable:true}); \
   const jwk=await exportJWK(privateKey); jwk.kid='prod-key-1'; \
   console.log(JSON.stringify(jwk))})()"
 
-# Run with the pinned key
+# Run with the pinned key (MACP_AUTH_SIGNING_ALG must match the key type; defaults to RS256)
 export MACP_AUTH_SIGNING_KEY_JSON='{"kty":"RSA","kid":"prod-key-1",...}'
 export MACP_AUTH_ISSUER=auth.example.com
 export MACP_AUTH_AUDIENCE=macp-runtime

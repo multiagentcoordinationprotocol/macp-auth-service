@@ -16,25 +16,25 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
   SDK agents (TS / Python) ──Authorization: Bearer <JWT>──► macp-runtime (gRPC)
 ```
 
-- **Minting:** the [control-plane](https://github.com/multiagentcoordinationprotocol/control-plane)
-  (or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/typescript-sdk)
-  or [Python SDK](https://github.com/multiagentcoordinationprotocol/python-sdk))
+- **Minting:** the [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane)
+  (or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript)
+  or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python))
   calls `POST /tokens` once per agent it spawns, passing `sender` + scopes.
   The returned JWT is handed to the agent in its bootstrap payload under
   `runtime.bearerToken`.
 - **Bearer presentation:** SDK-based agents load the bearer from bootstrap
   and present it as `Authorization: Bearer <JWT>` on every gRPC call to the
   runtime. See the SDK auth guides
-  ([TypeScript](https://github.com/multiagentcoordinationprotocol/typescript-sdk/blob/main/docs/guides/authentication.md),
-  [Python](https://github.com/multiagentcoordinationprotocol/python-sdk/blob/main/docs/guides/direct-agent-auth.md)).
+  ([TypeScript](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript/blob/main/docs/guides/authentication.md),
+  [Python](https://github.com/multiagentcoordinationprotocol/macp-sdk-python/blob/main/docs/guides/direct-agent-auth.md)).
 - **Verification:** the runtime is configured with
   `MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json`. It
   fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
   incoming JWT's signature + `iss` + `aud` + `exp` on each gRPC frame. See
   the runtime
-  [Getting Started](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/getting-started.md#jwt-mode)
+  [Getting Started](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode)
   and
-  [Deployment](https://github.com/multiagentcoordinationprotocol/runtime/blob/main/docs/deployment.md#authentication)
+  [Deployment](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#authentication)
   guides.
 
 This service is *not* in the hot path of a running session — tokens are minted
@@ -111,7 +111,8 @@ See `.env.example` for the complete reference. Minimum in production:
 | `MACP_AUTH_AUDIENCE` | `macp-runtime` | no | JWT `aud`. Must match runtime's expected audience. |
 | `MACP_AUTH_MAX_TTL_SECONDS` | `3600` | no | Upper bound on minted token lifetime. |
 | `MACP_AUTH_DEFAULT_TTL_SECONDS` | `300` | no | Applied when request omits `ttl_seconds`. |
-| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | RSA private JWK. If unset, generates an ephemeral keypair on startup (dev only — keys rotate on every restart). |
+| `MACP_AUTH_SIGNING_ALG` | `RS256` | no | Signature algorithm. `RS256` (RSA) or `ES256` (EC P-256). The runtime accepts both; the JWKS advertises whichever is configured. |
+| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | Private JWK matching `MACP_AUTH_SIGNING_ALG` (RSA for `RS256`, EC P-256 for `ES256`). If unset, generates an ephemeral keypair on startup (dev only — keys rotate on every restart). |
 
 ### Generating a production signing key
 
@@ -128,6 +129,10 @@ node -e "const {generateKeyPair, exportJWK} = require('jose'); \
 Set the output as `MACP_AUTH_SIGNING_KEY_JSON`. Rotate by generating a new
 key with a fresh `kid` and redeploying; the runtime's JWKS cache refreshes
 within `MACP_AUTH_JWKS_TTL_SECS`.
+
+For an EC P-256 key (`MACP_AUTH_SIGNING_ALG=ES256`), substitute `'ES256'` for
+`'RS256'` in the snippet above — `generateKeyPair`/`exportJWK` emit the
+matching `kty: "EC"` JWK, and the service advertises it on the JWKS unchanged.
 
 ## Development
 
@@ -149,7 +154,7 @@ docker run --rm -p 3200:3200 macp-auth-service:local
 curl http://localhost:3200/healthz
 ```
 
-The published CI image is `ghcr.io/multiagentcoordinationprotocol/auth-service`
+The published CI image is `ghcr.io/multiagentcoordinationprotocol/macp-auth-service`
 (see `.github/workflows/docker.yml`).
 
 ## Documentation

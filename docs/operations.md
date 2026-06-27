@@ -11,7 +11,7 @@ The service prints five lines on startup. Use these as a fingerprint for correct
 ```
 [auth-service] listening on port 3200
 [auth-service] issuer=macp-auth-service audience=macp-runtime
-[auth-service] key source: env
+[auth-service] key source: env alg: RS256
 [auth-service] JWKS: http://localhost:3200/.well-known/jwks.json
 [auth-service] Mint: POST http://localhost:3200/tokens
 ```
@@ -45,7 +45,7 @@ Rotation is the primary remediation for a suspected key compromise and a routine
 ### Routine rotation
 
 ```
-Step 1. Generate a new JWK.
+Step 1. Generate a new JWK (use 'ES256' in both places if MACP_AUTH_SIGNING_ALG=ES256).
   node -e "const {generateKeyPair,exportJWK}=require('jose');
     (async()=>{const {privateKey}=await generateKeyPair('RS256',{extractable:true});
     const jwk=await exportJWK(privateKey);
@@ -156,7 +156,7 @@ Check:
 `MACP_AUTH_SIGNING_KEY_JSON` is malformed. Common causes:
 - Shell quoting stripped the quotes inside the JSON. Quote the value correctly or use a file-based secret mount.
 - The JWK is public-only (missing `d`, `p`, `q`, etc.). The service requires a **private** JWK.
-- The JWK is for a non-RSA algorithm. The service only supports RS256.
+- The JWK's key type doesn't match `MACP_AUTH_SIGNING_ALG`: use an RSA JWK for `RS256` or an EC P-256 JWK for `ES256`. (An unsupported `MACP_AUTH_SIGNING_ALG` value also fails at boot.)
 
 Regenerate the JWK using the command in the [Deployment Guide](deployment.md#signing-key-generation) and re-inject.
 

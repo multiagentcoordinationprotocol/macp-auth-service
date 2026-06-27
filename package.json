@@ -1,5 +1,5 @@
 {
-  "name": "auth-service",
+  "name": "macp-auth-service",
   "version": "1.0.0",
   "description": "JWT-minting identity service for the MACP runtime (RFC-MACP-0004 §4).",
   "main": "dist/index.js",
@@ -25,12 +25,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/multiagentcoordinationprotocol/auth-service.git"
+    "url": "git+https://github.com/multiagentcoordinationprotocol/macp-auth-service.git"
   },
   "bugs": {
-    "url": "https://github.com/multiagentcoordinationprotocol/auth-service/issues"
+    "url": "https://github.com/multiagentcoordinationprotocol/macp-auth-service/issues"
   },
-  "homepage": "https://github.com/multiagentcoordinationprotocol/auth-service#readme",
+  "homepage": "https://github.com/multiagentcoordinationprotocol/macp-auth-service#readme",
   "type": "commonjs",
   "engines": {
     "node": ">=20"

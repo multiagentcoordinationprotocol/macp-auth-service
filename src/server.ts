@@ -60,7 +60,7 @@ export function createApp(config: AuthServiceConfig, signing: SigningMaterial): 
     const token = await new jose.SignJWT({
       macp_scopes: body.scopes ?? {},
     })
-      .setProtectedHeader({ alg: 'RS256', kid: signing.jwks.keys[0]?.kid })
+      .setProtectedHeader({ alg: signing.alg, kid: signing.jwks.keys[0]?.kid })
       .setSubject(body.sender)
       .setIssuer(config.issuer)
       .setAudience(config.audience)

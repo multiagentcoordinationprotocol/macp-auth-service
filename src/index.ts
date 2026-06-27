@@ -4,13 +4,13 @@ import { createApp } from './server';
 
 async function main(): Promise<void> {
   const config = loadConfigFromEnv();
-  const signing = await loadKey(config.signingKeyJson);
+  const signing = await loadKey(config.signingKeyJson, config.signingAlg);
   const app = createApp(config, signing);
 
   const server = app.listen(config.port, () => {
     console.log(`[auth-service] listening on port ${config.port}`);
     console.log(`[auth-service] issuer=${config.issuer} audience=${config.audience}`);
-    console.log(`[auth-service] key source: ${signing.source}`);
+    console.log(`[auth-service] key source: ${signing.source} alg: ${signing.alg}`);
     console.log(`[auth-service] JWKS: http://localhost:${config.port}/.well-known/jwks.json`);
     console.log(`[auth-service] Mint: POST http://localhost:${config.port}/tokens`);
   });
