@@ -189,11 +189,17 @@ export MACP_AUTH_ISSUER=macp-auth-service
 export MACP_AUTH_AUDIENCE=macp-runtime
 export MACP_AUTH_JWKS_URL=http://127.0.0.1:3200/.well-known/jwks.json
 export MACP_AUTH_JWKS_TTL_SECS=60
-# (plus the usual runtime config: MACP_ALLOW_INSECURE=1, MACP_BIND_ADDR, etc.)
-cargo run --manifest-path ../runtime/Cargo.toml
+export MACP_AUTH_JWT_ALGS=RS256,ES256   # runtime ≥ 0.5.0 default; covers both algs this service mints
+# The runtime starts here because JWT auth *is* configured above. MACP_ALLOW_INSECURE=1 below
+# is only for plaintext (no-TLS) local operation — not to satisfy the auth gate.
+export MACP_ALLOW_INSECURE=1
+export MACP_BIND_ADDR=0.0.0.0:50051
+cargo run --manifest-path ../macp-runtime/Cargo.toml
 ```
 
 Now run any gRPC client with the minted JWT as a bearer token. The runtime will fetch your JWKS on the first request and cache it for 60 seconds.
+
+> **Runtime ≥ 0.5.0 dev-mode gate:** if you start the runtime with *neither* a JWT issuer nor a static `MACP_AUTH_TOKENS_FILE`, it now refuses to start unless `MACP_ALLOW_INSECURE=1` — and the published runtime Docker image no longer bakes that flag in, so a bare `docker run` of the runtime fails fast. Pass auth config (as above) or the flag explicitly.
 
 ## Common errors
 

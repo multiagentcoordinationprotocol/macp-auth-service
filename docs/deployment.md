@@ -59,7 +59,7 @@ Key rotation is a deploy-and-wait procedure. There is no in-process rotation; th
 5. Existing tokens signed by the old key remain valid until their own exp.
 ```
 
-See the [Operations Runbook](operations.md#key-rotation) for the step-by-step procedure including verification and rollback.
+Convergence bound (runtime ≥ 0.5.0): with a **healthy** JWKS endpoint, every verifier picks up the new key within one `MACP_AUTH_JWKS_TTL_SECS` window (step 4). If the JWKS endpoint is **unreachable** when a verifier tries to refresh, that verifier keeps serving its last-known key set for up to `TTL + 3600 s` (stale-cache grace) — so a rotated-out key can still verify that long. A runtime restart clears the in-memory cache and is the hard cutoff. This matters most for emergency rotation — see the [Operations Runbook](operations.md#key-rotation) for the step-by-step procedure including JWKS-reachability verification, the outage caveat, and rollback.
 
 ## Secret handling
 
@@ -176,14 +176,18 @@ export MACP_AUTH_ISSUER=auth.example.com                       # matches auth-se
 export MACP_AUTH_AUDIENCE=macp-runtime                         # matches auth-service
 export MACP_AUTH_JWKS_URL=https://auth.example.com/.well-known/jwks.json
 export MACP_AUTH_JWKS_TTL_SECS=300                             # cache refresh interval
+export MACP_AUTH_JWT_ALGS=RS256,ES256                          # runtime ≥ 0.5.0 default allowlist
 ```
 
-The runtime fetches the JWKS on first use and caches it for `MACP_AUTH_JWKS_TTL_SECS`. Any token presented to the runtime is rejected unless:
+`MACP_AUTH_JWT_ALGS` is the runtime's signature-algorithm allowlist. Its default (`RS256,ES256`) already covers both algorithms this service can mint, so you normally leave it unset; HS256 is refused unless you add it here explicitly (and this service cannot mint HS256 regardless). The runtime fetches the JWKS on first use and caches it for `MACP_AUTH_JWKS_TTL_SECS`. Any token presented to the runtime is rejected unless:
 
 - The signature verifies against a key in the cached JWKS.
+- The header `alg` is in the runtime's `MACP_AUTH_JWT_ALGS` allowlist.
 - `iss` matches `MACP_AUTH_ISSUER`.
 - `aud` matches `MACP_AUTH_AUDIENCE`.
 - `exp` is in the future (within tolerable clock skew).
+
+For an air-gapped runtime that cannot reach this service over HTTP, the runtime also accepts the JWKS inline via `MACP_AUTH_JWKS_JSON` instead of `MACP_AUTH_JWKS_URL` — paste the exact body of `GET /.well-known/jwks.json`. This works precisely because our JWKS is stable when the signing key is pinned; you must re-push it on every key rotation, since there is no fetch to pick up the change.
 
 See the [runtime Getting Started guide](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode) for the full JWT configuration reference on the runtime side.
 
@@ -205,12 +209,15 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/auth.example.com/privkey.pem;
 
     location = /.well-known/jwks.json {
+        # Keep this path fast and unauthenticated: never gate it behind auth_request
+        # or an interactive challenge — the runtime fetches it non-interactively.
         proxy_pass http://127.0.0.1:3200;
         add_header Cache-Control "public, max-age=60";
     }
 
     location /tokens {
-        # Replace with your actual caller-auth mechanism
+        # Replace with your actual caller-auth mechanism.
+        # Note: auth_request here is fine — it fronts the *mint* endpoint, not the JWKS.
         auth_request /internal-auth-check;
         proxy_pass http://127.0.0.1:3200;
     }
@@ -220,6 +227,8 @@ server {
 ```
 
 The `Cache-Control` on the JWKS is optional but reduces runtime chatter once the cache warms.
+
+**JWKS latency budget (runtime ≥ 0.5.0).** The runtime aborts a JWKS fetch at **3 s to connect / 5 s total**. The auth-service itself answers in microseconds (the JWKS object is precomputed at startup), so the whole budget is spent in whatever sits in front of it: the `/.well-known/jwks.json` path must respond well under 5 s end-to-end, including TLS handshake and any cold DNS. Keep this path off `auth_request` and off any interactive challenge — a fetch that stalls past 5 s makes the runtime fall back to its stale cache (or fail auth entirely on a cold verifier), which is exactly the failure the grace window is meant to paper over, not a state you want to enter routinely.
 
 ## CI/CD
 

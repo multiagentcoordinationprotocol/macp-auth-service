@@ -1,5 +1,49 @@
 import * as jose from 'jose';
 import { loadKey } from './keys';
+import type { SigningAlg } from './config';
+
+describe('JWKS key contract — kid / alg / use', () => {
+  // Runtime v0.5.0 selects the verifying key in O(1) by `kid` and rejects any
+  // header `alg` outside its allowlist. Every key we serve must therefore carry
+  // a string `kid`, an `alg` in {RS256, ES256}, and `use: "sig"`. This turns the
+  // guarantee the runtime's fast path relies on into an explicit contract.
+  const cases: Array<{ name: string; alg: SigningAlg; build: () => Promise<string | undefined> }> = [
+    { name: 'ephemeral RS256', alg: 'RS256', build: async () => undefined },
+    { name: 'ephemeral ES256', alg: 'ES256', build: async () => undefined },
+    {
+      name: 'pinned RS256',
+      alg: 'RS256',
+      build: async () => {
+        const { privateKey } = await jose.generateKeyPair('RS256', { extractable: true });
+        const jwk = await jose.exportJWK(privateKey);
+        jwk.kid = 'rs-contract-key';
+        return JSON.stringify(jwk);
+      },
+    },
+    {
+      name: 'pinned ES256',
+      alg: 'ES256',
+      build: async () => {
+        const { privateKey } = await jose.generateKeyPair('ES256', { extractable: true });
+        const jwk = await jose.exportJWK(privateKey);
+        jwk.kid = 'ec-contract-key';
+        return JSON.stringify(jwk);
+      },
+    },
+  ];
+
+  it.each(cases)('every $name JWKS key has a string kid, allowlisted alg, and use=sig', async ({ alg, build }) => {
+    const material = await loadKey(await build(), alg);
+    expect(material.jwks.keys.length).toBeGreaterThan(0);
+    for (const key of material.jwks.keys) {
+      expect(typeof key.kid).toBe('string');
+      expect((key.kid as string).length).toBeGreaterThan(0);
+      expect(['RS256', 'ES256']).toContain(key.alg);
+      expect(key.alg).toBe(alg);
+      expect(key.use).toBe('sig');
+    }
+  });
+});
 
 describe('loadKey', () => {
   it('generates an ephemeral RSA keypair when no env key is provided', async () => {

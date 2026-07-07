@@ -66,7 +66,7 @@ The control-plane typically plays both roles: it mints tokens for agents it prov
 4. On first use, the runtime fetches the auth-service's JWKS at `MACP_AUTH_JWKS_URL` and caches it for `MACP_AUTH_JWKS_TTL_SECS`.
 5. The runtime holds the JWKS in memory until the TTL expires.
 6. The SDK agent opens a gRPC channel, wraps the bootstrap token in an `Auth` / `AuthConfig`, and sends every frame with `Authorization: Bearer <token>` metadata. The SDKs attach this automatically.
-7. The runtime verifies signature, `iss`, `aud`, and `exp` on every frame. A successful verify maps the JWT's `sub` to the authenticated sender identity and the `macp_scopes` claim to the capability set.
+7. The runtime verifies signature, `iss`, `aud`, and `exp` on every frame. Every token this service mints carries a `kid` in its header that matches the single JWKS key, so runtime ≥ 0.5.0 selects the verifying key in O(1) by `kid` (its try-all fallback is never exercised for our tokens). A successful verify maps the JWT's `sub` to the authenticated sender identity and the `macp_scopes` claim to the capability set.
 
 The auth-service is **not** in the hot path of a running session. Tokens are minted once at agent provisioning and reused for the session's lifetime.
 
@@ -227,13 +227,18 @@ export MACP_AUTH_ISSUER=macp-auth-service
 export MACP_AUTH_AUDIENCE=macp-runtime
 export MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json
 export MACP_AUTH_JWKS_TTL_SECS=300
+export MACP_AUTH_JWT_ALGS=RS256,ES256   # runtime ≥ 0.5.0 default; HS256 only if you add it here
 # Runtime's own config: bind addr, TLS, storage, etc.
 export MACP_BIND_ADDR=0.0.0.0:50051
 export MACP_ALLOW_INSECURE=1   # or MACP_TLS_CERT_PATH / MACP_TLS_KEY_PATH in prod
-cargo run --manifest-path runtime/Cargo.toml
+cargo run --manifest-path ../macp-runtime/Cargo.toml
 ```
 
-When `MACP_AUTH_ISSUER` is set, the runtime's JWT resolver activates and the static-bearer resolver is bypassed for JWT-shaped tokens (tokens containing dots). If you configure **both** a JWT issuer and a static `MACP_AUTH_TOKENS_FILE`, the runtime runs the JWT resolver first, then the static resolver. Dev-mode fallback is only active when **neither** is configured.
+When `MACP_AUTH_ISSUER` is set, the runtime's JWT resolver activates and the static-bearer resolver is bypassed for JWT-shaped tokens (tokens containing dots). If you configure **both** a JWT issuer and a static `MACP_AUTH_TOKENS_FILE`, the runtime runs the JWT resolver first, then the static resolver.
+
+`MACP_AUTH_JWT_ALGS` is the runtime's signature-algorithm allowlist; its default (`RS256,ES256`) already covers everything this service can mint, so you normally leave it unset. A token is rejected unless its header `alg` is in this allowlist — HS256 tokens are refused unless you explicitly add `HS256` here (this service cannot mint HS256 anyway). As of runtime 0.5.0 every RPC — including `WatchSignals` — requires authentication.
+
+Dev-mode note (runtime ≥ 0.5.0): with **neither** a JWT issuer nor a static `MACP_AUTH_TOKENS_FILE` configured, the runtime now **refuses to start** unless `MACP_ALLOW_INSECURE=1` is set — it no longer silently falls back to accepting any token. The flag also still gates plaintext (no-TLS) operation. The published runtime Docker image no longer bakes `MACP_ALLOW_INSECURE=1` in, so a bare `docker run` of the runtime image fails fast; pass auth config (as above) or the flag explicitly.
 
 ## Reference snippets: minting
 
@@ -403,7 +408,7 @@ Because the mint endpoint passes scopes through unmodified, any additional keys 
 | Caller forgets to set `content-type: application/json` on mint requests | `400 sender is required` even with `sender` in body | `express.json()` only parses when the header is correct. Set it. |
 | Caller passes `ttl_seconds: 0` | `400 ttl_seconds must be a positive number` | Omit the field (defaults apply) or pass a positive number. |
 | Agent retries a token after `exp` | Runtime returns `UNAUTHENTICATED` | Mint a fresh token; tokens are not refreshed server-side. |
-| Runtime started before the auth-service is reachable | First mint-backed request fails with `UNAUTHENTICATED` because JWKS fetch errored | Ensure orchestration starts auth-service first, or make the runtime's JWKS fetch resilient (retry with backoff). |
+| Runtime started before the auth-service is reachable | First mint-backed request fails with `UNAUTHENTICATED` because JWKS fetch errored | Transient on runtime ≥ 0.5.0: the runtime retries the JWKS fetch on each auth attempt (connect timeout 3 s, total 5 s) and, once it has fetched successfully, serves the last-known keys for up to a 1 h grace window if a later refresh fails — so no custom runtime-side retry logic is needed. Just ensure the auth-service's JWKS path responds well under 5 s end-to-end (including any proxy + TLS handshake). |
 | Two auth-service replicas with different `MACP_AUTH_SIGNING_KEY_JSON` | Intermittent `JWSSignatureVerificationFailed` depending on which replica served the JWKS last | Every replica in a deployment must share the same key. Use a single secret source. |
 
 ## Observability tips for callers

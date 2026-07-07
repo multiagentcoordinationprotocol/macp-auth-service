@@ -2,7 +2,11 @@
  * Runtime configuration. Reads from environment with sensible defaults.
  * Kept pure (no side effects) so tests can construct overrides.
  */
-/** Signature algorithms this service can mint with. The runtime accepts RS256, ES256 and HS256. */
+/**
+ * Signature algorithms this service can mint with. The runtime's default JWT allowlist is
+ * RS256/ES256 (runtime ≥ 0.5.0); HS256 requires `MACP_AUTH_JWT_ALGS=HS256` on the runtime and is
+ * not mintable here regardless.
+ */
 export type SigningAlg = 'RS256' | 'ES256';
 
 export interface AuthServiceConfig {
