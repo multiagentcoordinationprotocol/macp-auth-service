@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `MACP_AUTH_SIGNING_ALG` (`RS256` default, or `ES256`) to select the signature
   algorithm. `ES256` mints with an EC P-256 key; the JWKS advertises the matching
-  `kty: "EC"` public key. The runtime verifier already accepts RS256/ES256/HS256,
+  `kty: "EC"` public key. The runtime accepts RS256/ES256 by default (runtime 0.5.0),
   so this is additive and backward compatible. Invalid values fail fast at startup.
 - `src/contract.spec.ts` — cross-service contract test that pins the exact
   `macp_scopes` field set and JWT claim shape the runtime's `MACPClaims` /
@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Docs aligned to macp-runtime v0.5.0 auth changes (HS256 default removal,
+  JWKS fetch hardening + stale-cache grace, dev-mode `MACP_ALLOW_INSECURE` gate,
+  new `MACP_AUTH_JWT_ALGS` verifier allowlist). No production-code changes: this
+  service still mints RS256/ES256, both inside the runtime's default allowlist.
 - Pinned `jose` to `^5.9.6` (CommonJS-compatible) so jest/ts-jest can test the
   code in the same module system as the production build. All jose APIs used
   here (`generateKeyPair`, `exportJWK`, `importJWK`, `SignJWT`, `jwtVerify`,

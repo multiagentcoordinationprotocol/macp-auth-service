@@ -30,8 +30,9 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
 - **Verification:** the runtime is configured with
   `MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json`. It
   fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
-  incoming JWT's signature + `iss` + `aud` + `exp` on each gRPC frame. See
-  the runtime
+  incoming JWT's signature + header `alg` (against `MACP_AUTH_JWT_ALGS`,
+  default `RS256,ES256` on runtime ≥ 0.5.0) + `iss` + `aud` + `exp` on each
+  gRPC frame. See the runtime
   [Getting Started](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode)
   and
   [Deployment](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#authentication)
@@ -128,7 +129,10 @@ node -e "const {generateKeyPair, exportJWK} = require('jose'); \
 
 Set the output as `MACP_AUTH_SIGNING_KEY_JSON`. Rotate by generating a new
 key with a fresh `kid` and redeploying; the runtime's JWKS cache refreshes
-within `MACP_AUTH_JWKS_TTL_SECS`.
+within `MACP_AUTH_JWKS_TTL_SECS` while the JWKS endpoint stays reachable. On
+runtime ≥ 0.5.0 a verifier that can't refresh keeps the old key set for up to
+`TTL + 3600 s` (stale-cache grace) — see the
+[Operations Runbook](docs/operations.md#key-rotation) for emergency rotation.
 
 For an EC P-256 key (`MACP_AUTH_SIGNING_ALG=ES256`), substitute `'ES256'` for
 `'RS256'` in the snippet above — `generateKeyPair`/`exportJWK` emit the
@@ -145,6 +149,13 @@ npm run build        # compile to dist/
 npm start            # run the compiled build
 npm run typecheck    # tsc --noEmit
 ```
+
+### End-to-end against a live runtime (opt-in)
+
+`scripts/e2e-runtime.sh` mints RS256 and ES256 tokens and verifies them against a
+real macp-runtime v0.5.0 container (requires Docker + `grpcurl`; not wired into
+`npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`.
+See the script header for the manual stale-cache-grace probe.
 
 ## Docker
 

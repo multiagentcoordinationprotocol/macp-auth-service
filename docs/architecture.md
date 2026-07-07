@@ -114,7 +114,7 @@ There is no in-process rotation. The service advertises exactly one key at any g
 4. Wait `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh their JWKS caches.
 5. In-flight tokens signed by the previous key stop verifying at the end of their own TTL.
 
-See [Operations — Key rotation](operations.md#key-rotation) for the operational procedure.
+Step 4's one-TTL bound assumes a **healthy** JWKS endpoint. On runtime >= 0.5.0, a verifier whose refresh fails serves its last-known keys under a stale-cache grace for up to `TTL + 3600 s`, so a rotated-out key can verify that long on an isolated verifier; a runtime restart is the hard cutoff. See [Operations — Key rotation](operations.md#key-rotation) for the operational procedure and the emergency-rotation checklist that closes this gap.
 
 ## Concurrency model
 

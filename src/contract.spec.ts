@@ -7,8 +7,9 @@ import { AuthServiceConfig, SigningAlg } from './config';
 /**
  * Cross-service contract test.
  *
- * The auth-service mints tokens that the MACP runtime's JWT resolver
- * (`runtime/crates/macp-auth`, jsonwebtoken 9.x) verifies and deserializes into:
+ * Verified against macp-runtime v0.5.0 (`macp-runtime/crates/macp-auth`,
+ * jsonwebtoken 9.3.x). The auth-service mints tokens that the runtime's JWT
+ * resolver verifies and deserializes into:
  *
  *   struct MACPClaims  { sub: String, macp_scopes: Option<MACPScopes> }
  *   struct MACPScopes  {
@@ -22,6 +23,10 @@ import { AuthServiceConfig, SigningAlg } from './config';
  * If anyone adds, renames, or retypes a field on either side this test fails,
  * which is the whole point: it pins the wire contract that the runtime, the
  * control-plane minter, and the examples-service minter all depend on.
+ *
+ * Algorithm note: this service mints RS256 or ES256, both inside the runtime's
+ * default `MACP_AUTH_JWT_ALGS` allowlist (RS256,ES256) as of v0.5.0. HS256 is
+ * outside that default allowlist and this service cannot mint it either.
  */
 
 const RUNTIME_SCOPE_FIELDS = [

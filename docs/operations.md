@@ -66,13 +66,19 @@ Step 4. Verify the new JWKS is served.
   curl -sS https://auth.example.com/.well-known/jwks.json | jq .keys[0].kid
   # Should print the new kid.
 
-Step 5. Wait MACP_AUTH_JWKS_TTL_SECS.
-  - Verifiers refresh their cache on this interval.
+Step 5. Wait MACP_AUTH_JWKS_TTL_SECS (healthy-endpoint bound).
+  - Verifiers refresh their cache on this interval *as long as the JWKS
+    endpoint is reachable*.
   - During this window, new tokens (signed with new key) may fail verification
     on verifiers whose cache still holds the old JWKS. Existing tokens
     (signed with old key) also fail on verifiers that have already refreshed.
-  - This window is the only observable disruption; keep it short
-    (MACP_AUTH_JWKS_TTL_SECS=60 for fast rotations, 300 for routine).
+  - This window is the only observable disruption for a routine rotation; keep
+    it short (MACP_AUTH_JWKS_TTL_SECS=60 for fast rotations, 300 for routine).
+  - Outage caveat (runtime >= 0.5.0): if a verifier's refresh *fails* (JWKS
+    endpoint down/slow), it keeps serving the last-known keys under a stale-cache
+    grace for up to TTL + 3600 s — so a rotated-out key can still verify that
+    long. Convergence within one TTL is only guaranteed while the endpoint is
+    healthy. See the emergency-rotation notes below when the key must die *now*.
 
 Step 6. Retire the old key.
   - Delete the previous JWK from the secret manager.
@@ -87,6 +93,13 @@ Rotate immediately. Do not wait for a maintenance window. The process is the sam
 - **Shorten `MACP_AUTH_MAX_TTL_SECONDS` temporarily** to reduce the life of any outstanding tokens signed by the compromised key. Every token issued by the compromised key remains valid until its own `exp`.
 - **Audit the mint log.** The auth-service itself does not log mints, so you need your reverse-proxy access log, API gateway log, or caller-side audit trail. Reconstruct which `sender` identities were minted during the exposure window.
 - **Notify downstream operators** that tokens issued before the rotation timestamp should be treated as suspect for the remainder of their TTL.
+
+**Making the compromised key actually die (runtime >= 0.5.0).** Rotation alone does *not* revoke the old key within one TTL if any verifier can't reach the JWKS endpoint — the stale-cache grace keeps a rotated-out key verifiable for up to `TTL + 3600 s` on any verifier whose refresh is failing. The endpoint's availability is therefore part of your revocation guarantee, and an attacker who can DoS the JWKS endpoint can *extend* the compromised key's life to `TTL + 1 h`. So treat "the old key must die now" as a positive checklist, not a timer:
+
+  1. Rotate the key (routine steps 1–3).
+  2. Confirm the JWKS endpoint serves the **new** kid *from every verifier's vantage point* — `curl` the exact `MACP_AUTH_JWKS_URL` the runtime uses, from the runtime's own network location, not just from your laptop.
+  3. Confirm each runtime logs a **successful** JWKS refresh (and is *not* logging the stale-serve warning — see Monitoring signals). If you cannot confirm a clean refresh on a given verifier, **restart that runtime** — a restart clears the in-memory cache and is the hard cutoff that ends the grace window unconditionally.
+  4. Only after every verifier is confirmed on the new key set can you consider the old key revoked.
 
 ### Rollback
 
@@ -130,7 +143,8 @@ Check:
 Normal during the `MACP_AUTH_JWKS_TTL_SECS` window immediately after rotation. If it persists:
 - Confirm the new JWKS is served: `curl https://auth/.well-known/jwks.json`.
 - Confirm the verifier is fetching it: check verifier logs for JWKS fetch activity.
-- Restart the verifier to force a cache refresh.
+- On runtime >= 0.5.0, look for a warn-level `JWKS refresh failed; serving stale cached keys` line — it means that verifier is in stale-cache grace because its refresh is failing, so it may keep accepting *old*-key tokens (up to TTL + 3600 s) and reject new-key ones. Fix the fetch path (reachability, the 3 s/5 s timeout budget) rather than waiting it out.
+- Restart the verifier to force a cache refresh (this clears the grace state and is the hard cutoff).
 
 ### Verifier reports `JWTClaimValidationFailed: iss` or `aud`
 
@@ -183,9 +197,10 @@ The service does not emit metrics. Monitor it via external signals:
 | `POST /tokens` 5xx rate | Reverse proxy access log | Unexpected server errors; should be zero in normal operation. |
 | `POST /tokens` p95 latency | Reverse proxy access log | RS256 signing latency. Typically <50 ms. Sustained >250 ms indicates CPU pressure — scale horizontally. |
 | Container restarts | Orchestrator | Unexpected restarts mean unexpected key rotations (for ephemeral keys) or env/secret regressions. Alert on non-zero. |
-| JWKS fetch rate (runtime-side) | Runtime metrics | Should equal `1 / MACP_AUTH_JWKS_TTL_SECS` per replica. Missing or bursty fetches indicate a verifier-side caching bug. |
+| JWKS fetch rate (runtime-side) | Runtime Prometheus endpoint (`MACP_METRICS_ADDR`) / runtime logs | On runtime >= 0.5.0 refresh is single-flight, so expect **<= 1 fetch per `MACP_AUTH_JWKS_TTL_SECS` per runtime process**. Bursty/thundering-herd fetches are now even more anomalous (the thundering-herd path is fixed) — treat them as a verifier-side bug. Missing fetches on a warm verifier mean it is stuck on a cached (possibly stale) key set. |
+| `JWKS refresh failed; serving stale cached keys` (warn) | Runtime logs | The signal that a verifier has entered stale-cache grace: its last refresh failed and it is serving last-known keys (up to TTL + 3600 s). During/after a rotation this means the rotated-out key may still verify on that node — fix the fetch path or restart the runtime. |
 
-If you need in-process metrics, wrap `createApp` to register Prometheus counters before mounting the routes. The hooks are straightforward because `createApp` is pure.
+If you need in-process metrics, wrap `createApp` to register Prometheus counters before mounting the routes. The hooks are straightforward because `createApp` is pure. (The runtime exposes its own Prometheus metrics via `MACP_METRICS_ADDR`; the fetch-rate and grace signals above live there and in its logs, not in the auth-service.)
 
 ## Incident checklist: suspected key compromise
 
