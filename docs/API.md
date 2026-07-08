@@ -102,9 +102,9 @@ Mints a signed JWT (RS256 by default, or ES256 when `MACP_AUTH_SIGNING_ALG=ES256
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `sender` | string | Yes | The agent identity. Becomes the JWT `sub` claim and the authenticated sender the runtime associates with incoming frames. Must be a non-empty string. |
-| `scopes` | object | No | Capability flags, serialized verbatim under `macp_scopes`. Defaults to `{}` (permissive in the runtime's current interpretation — see scopes schema below). |
-| `ttl_seconds` | number | No | Requested token lifetime in seconds. Must be positive and finite. Clamped to `MACP_AUTH_MAX_TTL_SECONDS`. Defaults to `MACP_AUTH_DEFAULT_TTL_SECONDS` when omitted. |
+| `sender` | string | Yes | The agent identity. Becomes the JWT `sub` claim and the authenticated sender the runtime associates with incoming frames. Must be a non-empty, non-whitespace-only string. |
+| `scopes` | object | No | Capability flags, serialized verbatim under `macp_scopes`. Must be a JSON object when present — a string, array, or `null` is rejected with `400`. Defaults to `{}` (permissive in the runtime's current interpretation — see scopes schema below). |
+| `ttl_seconds` | number | No | Requested token lifetime in seconds. Must be a positive number. Clamped to `MACP_AUTH_MAX_TTL_SECONDS`. Defaults to `MACP_AUTH_DEFAULT_TTL_SECONDS` when omitted (or when sent as JSON `null`). |
 
 **Scopes schema** (all fields optional)
 
@@ -169,8 +169,10 @@ The service returns plain JSON errors with an `error` field. Only the validation
 
 | Status | Body | Cause |
 |--------|------|-------|
-| `400` | `{"error":"sender is required"}` | Body missing, not JSON, or `sender` absent / empty / not a string. |
-| `400` | `{"error":"ttl_seconds must be a positive number"}` | `ttl_seconds` is `0`, negative, `NaN`, `Infinity`, or non-numeric. |
+| `400` | `{"error":"invalid JSON body"}` | Body is not parseable JSON. |
+| `400` | `{"error":"sender is required"}` | Body missing, or `sender` absent / empty / whitespace-only / not a string. |
+| `400` | `{"error":"scopes must be an object"}` | `scopes` present but not a JSON object (e.g. a string, array, or `null`). |
+| `400` | `{"error":"ttl_seconds must be a positive number"}` | `ttl_seconds` is `0`, negative, or non-numeric. JSON `null` falls back to the default TTL. |
 | `404` | (express default) | Unknown path. |
 | `500` | (express default) | Should not occur in normal operation. Indicates an unexpected exception during signing; check server logs. |
 

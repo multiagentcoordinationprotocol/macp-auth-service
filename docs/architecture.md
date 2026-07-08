@@ -31,7 +31,7 @@ The split between `config`, `keys`, `server`, and `index` is the central archite
 - `server.ts` exports `createApp(config, signing)` — a pure function that builds an `Express` app bound to the given config and signing material. It never calls `.listen()`, never reads `process.env`, and never touches the filesystem.
 - `index.ts` is the only file that owns side effects: it calls `loadConfigFromEnv()`, `loadKey()`, `createApp()`, `.listen()`, and wires `SIGTERM` / `SIGINT` handlers.
 
-This split means tests construct a real Express app with a real RSA key, round-trip real HTTP, and assert real JWT signatures — without opening a network socket or depending on the environment. `server.spec.ts` is the reference for this pattern.
+This split means tests construct a real Express app with a real RSA key, round-trip real HTTP, and assert real JWT signatures — without opening a network socket or depending on the environment. `server.spec.ts` is the reference for this pattern. Two suites deliberately go beyond it: `integration.spec.ts` binds a real socket on an ephemeral port and verifies tokens via `jose.createRemoteJWKSet` (an actual network JWKS fetch — the runtime's consumption path), and `contract.spec.ts` pins the exact `macp_scopes` wire shape the runtime's Rust structs deserialize. `scripts/smoke.js` covers the last gap: a dependency-free black-box check of a *running* instance, used by CI against both the compiled build and the Docker image.
 
 ## Request lifecycle
 
@@ -58,7 +58,10 @@ Returns the pre-computed JWKS from `SigningMaterial.jwks`. This object is built 
 ```
 request
   → express.json middleware
-  → validate body.sender (non-empty string)
+      (a malformed body throws here; a dedicated error handler converts it
+       to 400 {"error":"invalid JSON body"} instead of Express's HTML page)
+  → validate body.sender (non-empty, non-whitespace string)
+  → validate body.scopes (plain object when present — not a string/array/null)
   → resolve ttl (body.ttl_seconds ?? config.defaultTtlSeconds)
   → validate ttl (finite, positive)
   → clamp ttl (min(ttl, config.maxTtlSeconds))
@@ -73,7 +76,7 @@ request
   → { token, sender, expires_in_seconds } response
 ```
 
-Two validation branches fail fast with `400` before any signing work happens. Once validation passes, `jose.SignJWT` builds the JWS compact serialization entirely in memory. The private key is held as a Node `KeyObject` (via `jose.importJWK` or `jose.generateKeyPair`); it is never exposed outside this module and is never logged.
+The scopes check exists because the runtime deserializes `macp_scopes` into a struct — a non-object would mint a token the runtime rejects, so the mint boundary fails fast instead. Three validation branches fail fast with `400` before any signing work happens. Once validation passes, `jose.SignJWT` builds the JWS compact serialization entirely in memory. The private key is held as a Node `KeyObject` (via `jose.importJWK` or `jose.generateKeyPair`); it is never exposed outside this module and is never logged.
 
 Clock skew handling is deliberately simple: `iat` is set to the process's current time and `exp` is `iat + ttl`. The verifier is responsible for tolerating skew via `clockTolerance` — the runtime defaults to a small window.
 
@@ -126,8 +129,9 @@ The in-memory `SigningMaterial` is immutable for the process lifetime, so no loc
 
 | Failure | Response | Recovery |
 |---------|----------|----------|
-| Malformed JSON body | `400` (express default) | Caller resends valid JSON. |
-| Missing `sender` | `400` with `{"error":"sender is required"}` | Caller adds `sender`. |
+| Malformed JSON body | `400` with `{"error":"invalid JSON body"}` | Caller resends valid JSON. |
+| Missing / empty / whitespace-only `sender` | `400` with `{"error":"sender is required"}` | Caller adds a non-empty `sender`. |
+| Non-object `scopes` (string, array, `null`) | `400` with `{"error":"scopes must be an object"}` | Caller passes a JSON object or omits the field. |
 | Invalid `ttl_seconds` | `400` with `{"error":"ttl_seconds must be a positive number"}` | Caller passes a finite positive number. |
 | `jose.SignJWT(...).sign()` throws | `500` (express default) | Unexpected — investigate logs. Usually indicates a key material corruption. |
 | Invalid `MACP_AUTH_SIGNING_KEY_JSON` at startup | Process exit code 1 | Fix the JWK in the secret store and restart. |

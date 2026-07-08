@@ -87,6 +87,18 @@ describe('loadKey', () => {
     expect(key.d).toBeUndefined();
   });
 
+  it('defaults kid to "key-1" when the env JWK carries none', async () => {
+    const { privateKey } = await jose.generateKeyPair('RS256', { extractable: true });
+    const jwk = await jose.exportJWK(privateKey);
+    delete jwk.kid;
+    const material = await loadKey(JSON.stringify(jwk));
+    expect(material.jwks.keys[0].kid).toBe('key-1');
+  });
+
+  it('rejects a signing key that is not valid JSON', async () => {
+    await expect(loadKey('not json at all')).rejects.toThrow();
+  });
+
   it('loads a fixed keypair from a JWK and never leaks private material on JWKS', async () => {
     const { privateKey } = await jose.generateKeyPair('RS256', { extractable: true });
     const jwk = await jose.exportJWK(privateKey);

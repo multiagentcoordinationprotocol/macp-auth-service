@@ -71,6 +71,25 @@ npm run build && npm start
 
 See the [Deployment Guide](deployment.md) for the full environment variable reference and the production checklist.
 
+### Verify your checkout
+
+The test suite exercises the full HTTP surface — including an integration layer that binds a real socket and verifies tokens via a remote JWKS fetch, the same path the runtime uses.
+
+```bash
+npm test              # unit + integration + contract suites
+npm run lint
+npm run typecheck
+```
+
+There is also a black-box smoke test that drives any **running** instance (local, Docker, or deployed) using only Node built-ins — no npm install required on the machine running it:
+
+```bash
+npm run dev &                                # or point at any deployed instance
+node scripts/smoke.js http://localhost:3200
+```
+
+It checks `/healthz`, the JWKS (including that no private material leaks), mints a short-lived token for `sender: "smoke-test"` and verifies its signature against the served JWKS, and confirms the validation errors respond correctly. CI runs this same script against the compiled build and against the Docker image before publishing it.
+
 ## Your first minted token
 
 The mint flow is a single POST. The service validates the request, clamps the TTL to `MACP_AUTH_MAX_TTL_SECONDS`, signs a JWT with the in-memory private key, and returns the token together with the resolved TTL.
@@ -205,8 +224,10 @@ Now run any gRPC client with the minted JWT as a bearer token. The runtime will 
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `400 sender is required` | Missing or empty `sender` in request body | Include a non-empty string for `sender` |
-| `400 ttl_seconds must be a positive number` | `ttl_seconds` non-positive, `NaN`, or `Infinity` | Pass a positive finite number, or omit to use the default |
+| `400 invalid JSON body` | Request body is not parseable JSON | Fix the JSON (unbalanced braces, trailing commas, unquoted keys are the usual suspects) |
+| `400 sender is required` | `sender` missing, empty, whitespace-only, or not a string | Include a non-empty string for `sender` |
+| `400 scopes must be an object` | `scopes` sent as a string, array, or `null` | Pass a JSON object (or omit the field for `{}`) |
+| `400 ttl_seconds must be a positive number` | `ttl_seconds` zero, negative, or non-numeric (e.g. a quoted `"300"`) | Pass a positive number, or omit to use the default |
 | `JWSSignatureVerificationFailed` at the runtime | Runtime's JWKS cache is stale after a key rotation | Wait `MACP_AUTH_JWKS_TTL_SECS` or restart the runtime |
 | `JWTClaimValidationFailed: "iss" claim` | `MACP_AUTH_ISSUER` mismatch between auth-service and runtime | Align the two env vars |
 | `JWTClaimValidationFailed: "aud" claim` | `MACP_AUTH_AUDIENCE` mismatch | Align the two env vars |
