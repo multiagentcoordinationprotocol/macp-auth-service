@@ -38,6 +38,18 @@ If you see `key source: ephemeral` in a production replica, treat it as a P1.
 2. Confirm the deployment manifest references the secret correctly (`envFrom` / `valueFrom.secretKeyRef`).
 3. Roll the deployment. On restart the log should read `key source: env`.
 
+## One-command smoke test
+
+`scripts/smoke.js` black-box-checks a running instance end to end using only Node 20+ built-ins — no npm install needed on the box you run it from:
+
+```bash
+node scripts/smoke.js https://auth.example.com
+```
+
+It waits for `/healthz`, fetches the JWKS and asserts no private material leaks, mints a token for `sender: "smoke-test"` with a 60-second TTL and verifies its signature against the served JWKS (RS256 and ES256), checks the claim structure, and confirms the validation errors respond correctly. It is safe against production — the only side effect is that one short-lived minted token — but note the mint will appear in your proxy's audit log like any other. CI runs this same script against every build and every Docker image before publishing.
+
+Run it first when triaging: a full pass localizes the problem to the verifier side (runtime config, JWKS reachability, caches) rather than the auth-service itself.
+
 ## Key rotation
 
 Rotation is the primary remediation for a suspected key compromise and a routine hygiene operation otherwise. Plan for rotations to be seamless to callers — tokens in flight keep working, new tokens use the new key.
@@ -136,7 +148,9 @@ Check:
 
 Check:
 - `content-type: application/json` is set on the request. Without it, `express.json()` does not parse the body and `req.body` is `undefined`.
-- Body is valid JSON. Malformed bodies are rejected by the express json middleware before the handler runs.
+- `sender` is a plain string and not just whitespace. Non-string values (numbers, objects) and whitespace-only strings are rejected with this error.
+
+Malformed JSON is **not** this error — it returns a distinct `400 {"error":"invalid JSON body"}`, so the two failure modes are distinguishable from the caller's side. If callers report `invalid JSON body`, the body text itself is broken (shell quoting eating braces is the classic cause); if they report `sender is required` with a seemingly correct body, suspect the `content-type` header first.
 
 ### Verifier reports `JWSSignatureVerificationFailed` after a rotation
 

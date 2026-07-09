@@ -30,7 +30,11 @@ jobs:
       # crashes Node during emulated linux/arm64 `npm ci` with
       # "qemu: uncaught target signal 4 (Illegal instruction)". qemu-v8.1.5 is
       # stable for Node 20 under emulation.
+      #
+      # Emulated arm64 builds are slow, so PRs build amd64 only; the multi-arch
+      # manifest is produced on push to main and on tags.
       - name: Set up QEMU
+        if: github.event_name != 'pull_request'
         uses: docker/setup-qemu-action@v3
         with:
           image: tonistiigi/binfmt:qemu-v8.1.5
@@ -40,11 +44,39 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        # Fork PRs get a read-only GITHUB_TOKEN; skip login (and the push below).
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the host-arch image into the local daemon first and boot it, so a
+      # broken image can never reach the registry.
+      - name: Build image for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: macp-auth-service:smoke
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test image
+        run: |
+          docker run -d --name smoke -p 3200:3200 macp-auth-service:smoke
+          trap 'docker logs smoke; docker rm -f smoke >/dev/null' EXIT
+          node scripts/smoke.js http://localhost:3200
+          # The Dockerfile HEALTHCHECK must also converge to healthy.
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' smoke)"
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          [ "$(docker inspect -f '{{.State.Health.Status}}' smoke)" = healthy ] || { echo "container never became healthy"; exit 1; }
 
       - name: Extract metadata
         id: meta
@@ -63,9 +95,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

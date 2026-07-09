@@ -94,7 +94,7 @@ curl http://localhost:3200/healthz
 
 ### Published images
 
-CI publishes to `ghcr.io/multiagentcoordinationprotocol/macp-auth-service`. PR builds are tagged `pr-<n>`. Merges to `main` are tagged `latest` and `sha-<7hex>`. See `.github/workflows/docker.yml` for the exact tagging strategy.
+CI publishes to `ghcr.io/multiagentcoordinationprotocol/macp-auth-service`. Every image is booted and smoke-tested (`scripts/smoke.js`) before it is pushed. PR builds are `linux/amd64` only and tagged `pr-<n>`; merges to `main` and `v*` tags are multi-arch (`linux/amd64` + `linux/arm64`) tagged `latest` and `sha-<7hex>`. See `.github/workflows/docker.yml` for the exact tagging strategy.
 
 ### Recommended runtime configuration
 
@@ -232,15 +232,17 @@ The `Cache-Control` on the JWKS is optional but reduces runtime chatter once the
 
 ## CI/CD
 
-Two GitHub Actions workflows ship with the repo.
+Three GitHub Actions workflows ship with the repo.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | PR + push to `main` | Lint, typecheck, build, test |
-| `docker.yml` | PR + push to `main` | Build and publish container image to GHCR |
+| `ci.yml` | PR + push to `main` | Lint, typecheck, test, build + smoke test, dependency review |
+| `docker.yml` | PR + push to `main` / tags | Build the container image, smoke-test it, publish to GHCR |
 | `notify-website.yml` | push to `main` with docs changes | Notify the docs website to sync |
 
-CI runs `npm ci && npm run lint && npm run typecheck && npm run build && npm test` against Node 20. The Docker workflow tags images `pr-<n>` for PR builds and `latest` + `sha-<7hex>` for main.
+`ci.yml` runs lint and typecheck, then the test suite on a Node 20 + 22 matrix (Node 20 is the `engines` floor). Coverage floors are enforced by `coverageThreshold` in `jest.config.js`, so a coverage regression fails the build. The build job compiles the service, boots `dist/index.js`, and runs `scripts/smoke.js` against it — a black-box check that mints a token and verifies its signature against the served JWKS. PRs additionally get a dependency review that fails on newly introduced high-severity vulnerable dependencies.
+
+`docker.yml` builds the image into the local daemon first, boots it, runs `scripts/smoke.js` against the container, and waits for the Dockerfile `HEALTHCHECK` to report healthy — only then does it push, so a broken image can never reach the registry. PR builds are `linux/amd64` only and tagged `pr-<n>` (PRs from forks build but do not push — their token cannot write to GHCR). Pushes to `main` and version tags build the multi-arch manifest (`linux/amd64` + `linux/arm64` via pinned QEMU) tagged `latest` + `sha-<7hex>`, plus semver tags on `v*` releases.
 
 ## Resource sizing
 
