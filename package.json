@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "jose": "^5.9.6"
+    "jose": "^6.2.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
