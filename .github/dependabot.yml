@@ -8,8 +8,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+      major-updates:
+        update-types: [major]
     ignore:
-      # Major migrations — do deliberately, not as drive-by bumps.
       - dependency-name: "typescript"      # TS 7 (tsgo) is a major rewrite
         update-types: ["version-update:semver-major"]
       - dependency-name: "jose"            # crypto lib — review JWT/JWKS API changes
