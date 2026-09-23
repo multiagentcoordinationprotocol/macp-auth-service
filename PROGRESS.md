@@ -18,7 +18,7 @@ branch for a readable history and a real restore point.
 1. Re-pin the exact verified-against runtime version (v0.5.0 → v0.8.1). **DONE**
 2. Document two integration footguns (`MACP_AUTH_JWKS_JSON` precedence/malformed-fallback;
    `can_manage_mode_registry` under-description). **DONE**
-3. Fix the incidental `CLAUDE.md` `@types/node` doc-freshness gap; full regression pass.
+3. Fix the incidental `CLAUDE.md` `@types/node` doc-freshness gap; full regression pass. **DONE**
 
 ## Phase log
 
@@ -46,6 +46,36 @@ branch for a readable history and a real restore point.
   `MACP_AUTH_JWKS_JSON=""` edge case) — judged already covered by the existing "malformed" wording,
   not worth reopening committed text for.
 - Next: Phase 3 (CLAUDE.md `@types/node` fix + full regression pass).
+
+### Phase 3 — DONE (2026-09-23), 2 verify rounds
+- Round 1 verdict: **GAPS** (3), fresh Opus verifier (agent `a8d24f6457486371a`):
+  1. `CLAUDE.md` is listed by exact name in `.gitignore:13` and was never git-tracked — the phase's
+     headline fix would have been silently unshippable. Not a defect introduced this phase; a
+     pre-existing repo choice this phase failed to notice and document.
+  2. The proposed `@types/node`/CI wording was factually backwards: `.nvmrc` (`20`) *is*
+     `engines.node`'s floor, and no CI reconfiguration (matrix, different `typecheck` runtime) could
+     ever catch a `@types/node`-vs-floor mismatch, since `tsc` resolves `node:` types from the
+     installed package, not the executing Node binary.
+  3. Plan bookkeeping (top status line, Phase 3 `Status:` field) was stale — judged acceptable to
+     defer to phase-close in round 2 (matches how Phases 1-2 were closed).
+- Fixes applied: reworded `CLAUDE.md:109` and the plan's Phase 3 text to state the corrected,
+  verified mechanism; added an explicit "Divergence discovered during `/implement`" note documenting
+  `CLAUDE.md`'s untracked status (not force-added — respects the repo's existing `.gitignore`
+  choice); added a one-sentence Docker port-publish-race caveat to `scripts/e2e-runtime.sh`'s new
+  readiness-check comment (verifier's non-blocking suggestion, cheap to include).
+- Round 2 verdict: **PASS**, fresh Opus verifier (agent `ac567dfee877b05e2`), all three gaps
+  confirmed closed against actual file contents/`git status`, not re-reviewed cold.
+- Unplanned files touched, both logged and justified inline (see plan's Phase 3 divergence notes and
+  `ASSUMPTIONS.md`): `scripts/e2e-runtime.sh` (readiness-check swapped from reflection-dependent
+  `grpcurl ... list` to a plain TCP-connect, after a live run against
+  `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` — which reports `v0.8.0` at boot, a
+  harmless tag lag — found the runtime doesn't expose gRPC reflection); `ASSUMPTIONS.md` (new file,
+  one entry, `UNCONFIRMED`, logging that `expect_accept`/`expect_reject` still can't run without
+  `-proto`/`-protoset` wiring — real follow-up work, out of this plan's scope, routed to
+  `/reconcile`).
+- Gates: `npm test` 54/54 (98.18% stmts / 95.55% branch, over threshold), `npm run lint`, `npm run
+  typecheck` all green, re-run after every edit in this phase including the gap fixes.
+- This was the last phase. Proceeding to finalization (§4) next.
 
 ## This repo (`auth-service`)
 

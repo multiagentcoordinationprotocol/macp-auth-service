@@ -1,6 +1,6 @@
 # Plan: re-verify auth-service against macp-runtime v0.8.1 (+ control-plane 0.3.0, sdk-ts 0.11.0, sdk-py 0.9.1)
 
-Status: in progress (Phase 2 of 3 done)
+Status: DONE (all 3 phases complete)
 Owner: auth-service maintainers
 Scope: this repo only (`auth-service`). No code changes to any sibling repo are proposed here.
 Ground truth verified against (all as siblings under `/Users/Shared/multiagentcoordinationprotocol/`):
@@ -185,7 +185,18 @@ runtime's env or logs). No code fix exists on this side of the boundary; the mit
 
 ### Phase 3 — Fix the incidental `CLAUDE.md` dependency-doc drift; full regression pass
 
-**Status:** TODO
+**Status:** DONE — implemented with two rounds of verification. Round 1: **GAPS** (3) — `CLAUDE.md`'s
+gitignored status went undiscussed, the `@types/node`/CI reasoning was factually backwards (`.nvmrc`
+*is* the floor; no Node-version CI change could catch a `tsc`/`@types/node` mismatch anyway), and
+plan bookkeeping was stale. All three fixed (see the divergence notes inline above and in
+`ASSUMPTIONS.md`); round 2: **PASS**, fresh Opus agent, all three confirmed closed against the actual
+file contents and `git status`, suite still green (54/54, coverage over threshold, lint/typecheck
+clean). Net divergence from the original plan: (a) `CLAUDE.md`'s fix is real but untrackable by git —
+documented, not force-committed; (b) the `@types/node` risk statement was rewritten to the
+factually-correct mechanism, not the plan's first draft; (c) two unplanned files touched —
+`scripts/e2e-runtime.sh` (readiness-check fix) and `ASSUMPTIONS.md` (new) — while attempting the
+best-effort live e2e run, which surfaced a real, separate, out-of-scope issue (runtime image lacks
+gRPC reflection) logged as `UNCONFIRMED` rather than silently expanded into.
 
 **Delivers:** `CLAUDE.md`'s dependency-constraints section stops asserting a specific `@types/node`
 range that goes stale on every Dependabot bump, and the whole suite (lint, typecheck, test with
@@ -203,18 +214,30 @@ pass is documentation-only.
   The naive fix ("kept at or above the floor") would state a false safety guarantee: `@types/node`
   pinned *above* the floor is the unsafe direction, not the safe one — it lets `tsc` typecheck
   against `node:`-builtin APIs from Node 26 that don't exist on the `engines.node >= 20` floor this
-  service claims to support, and CI does not catch that gap today (`.github/workflows/ci.yml` runs
-  `lint`/`typecheck` only on the version pinned in `.nvmrc`; the separate Node 20/22 matrix at
-  `ci.yml:45` runs `test` only, never `typecheck`). Reword to name the real risk instead:
-  `` **`@types/node`** — Dependabot keeps this ahead of the `engines.node` floor (`>=20`); normal
-  for a devDependency, but it means `tsc` cannot catch use of a `node:`-builtin API newer than
-  Node 20 actually has. CI's `typecheck` job runs only on `.nvmrc`'s pinned version, not the
-  `engines` floor, so this gap is currently unmitigated by CI — take care with any new dependency
-  on a recent Node builtin. ``
-- No other files change in this phase; it is verification-only otherwise. (Actually fixing the CI
-  gap — running `typecheck` across the full Node matrix, not just `.nvmrc` — is a real behavior
-  change to `.github/workflows/ci.yml`, not a docs fix, and is out of scope for this plan; the
-  reworded `CLAUDE.md` line above is what carries the warning forward until someone takes that on.)
+  service claims to support. **Correction made during `/implement` (Phase 3's fresh-verifier pass
+  caught this):** the plan's first draft additionally claimed CI doesn't catch this because
+  `typecheck` runs only on `.nvmrc`'s version, "not the `engines` floor" — that's factually wrong:
+  `.nvmrc` is `20`, which *is* the floor (`.github/workflows/ci.yml:23,34`; confirmed by reading the
+  file, not assumed). The real reason no CI configuration can catch this is more fundamental and
+  version-independent: `tsc`'s view of `node:` APIs comes entirely from the installed `@types/node`
+  package, not from whichever Node binary executes `tsc` — so running `typecheck` under Node 20
+  instead of Node 26 changes nothing about what `tsc` accepts. Reword to name the real risk
+  correctly: `` **`@types/node`** — Dependabot keeps this ahead of the `engines.node` floor
+  (`>=20`); normal for a devDependency, but it means `tsc` type-checks against `node:`-builtin
+  declarations that may not exist on Node 20. No CI job can catch this by running on a different
+  Node version: `tsc`'s view of `node:` APIs comes entirely from the installed `@types/node`
+  package, not from whichever Node binary happens to execute `tsc` — so `typecheck` running on
+  `.nvmrc`'s Node 20 (which does match the `engines` floor) type-checks against Node 26 declarations
+  regardless. If a change relies on a recent Node builtin, verify by hand that it actually exists on
+  Node 20. ``
+- No CI/workflow changes are proposed: per the corrected understanding above, no CI configuration
+  (running `typecheck` on a different Node version, adding it to the matrix, etc.) could actually
+  catch this risk, since `tsc`'s `node:` type view is tied to the installed `@types/node` package,
+  not to the Node binary running `tsc`. The reworded `CLAUDE.md` line is the only mitigation this
+  plan proposes — a durable warning for the next contributor, not a CI fix that doesn't exist.
+- Two more files ended up touched during this phase's verification work (below), beyond the original
+  plan — see each one's divergence note: `scripts/e2e-runtime.sh` (readiness-check fix) and
+  `ASSUMPTIONS.md` (new file, logging the e2e finding this phase couldn't fully resolve).
 
 **Approach:** fix the *invariant*, not the *snapshot* — CLAUDE.md exists to describe conventions that
 outlive individual dependency bumps (see the file's own framing), so a hardcoded minor-version range
@@ -230,9 +253,22 @@ The only risk is scope creep (e.g. "while we're in here, let's also bump `@types
 range in `package.json`") — explicitly out of scope: `package.json` is not touched by this plan, and
 no dependency version changes anywhere in this repo.
 
+**Divergence discovered during `/implement` (Phase 3's fresh-verifier pass caught this):**
+`CLAUDE.md` is listed by name in this repo's own `.gitignore:13` and has never been a tracked file
+(`git log -- CLAUDE.md` is empty; `git ls-files` doesn't list it) — despite the harness generally
+treating `CLAUDE.md` as "project instructions checked into the codebase." This appears to be a
+deliberate repo choice (the file is excluded by exact name, not an accidental wildcard match), not
+something introduced by this plan, so this phase does not change `.gitignore` — that's a repo-policy
+call for a human to make, not an implementation detail to fix silently mid-phase. Practical effect:
+the corrected `@types/node` wording below is real and takes effect for any Claude Code session
+reading this repo locally, but it **cannot appear in `git diff`, this phase's commit, or the PR** —
+there is nothing to `git add`. The acceptance criteria below are phrased accordingly (verified by
+reading the file's current content, not by a `git diff`).
+
 **Acceptance criteria:**
-- `CLAUDE.md`'s dependency-constraints section no longer states a specific `@types/node` minor/patch
-  range; it states the floor invariant instead.
+- `CLAUDE.md`'s dependency-constraints section, read directly from disk, no longer states a specific
+  `@types/node` minor/patch range and no longer implies a nonexistent CI mitigation; it states the
+  real, version-independent risk instead. (Not visible in `git diff` — see the divergence note above.)
 - `npm run lint`, `npm run typecheck`, and `npm test -- --coverage` (or `npm run test:coverage`) all
   pass with the existing coverage thresholds in `jest.config.js`. `git diff --stat -- src/` across
   all three phases shows changes only to comment lines in `src/contract.spec.ts` and
@@ -241,7 +277,10 @@ no dependency version changes anywhere in this repo.
 - If Docker and a runnable `macp-runtime` v0.8.1 binary/image are available locally,
   `scripts/e2e-runtime.sh` is re-run once against it as the strongest available confirmation (it
   exercises the real Rust verifier end-to-end, not just the offline contract pin) — this is best-effort
-  given it depends on local environment availability, not a hard gate on the phase.
+  given it depends on local environment availability, not a hard gate on the phase. **Divergence
+  (see Phase 3's closing note): the live run surfaced that the script's grpcurl calls depend on gRPC
+  server reflection, which the current published runtime image does not expose — a pre-existing issue
+  unrelated to this plan's scope, not something this phase attempts to fully fix.**
 
 **Tests:** `npm run lint`, `npm run typecheck`, `npm test -- --coverage`; optionally
 `scripts/e2e-runtime.sh` against a live runtime 0.8.1 instance.
@@ -285,7 +324,24 @@ rediscover during an incident.
    itself (setting inline JWKS is a legitimate air-gapped-deployment feature; the interaction with a
    simultaneously-set URL is the operator's configuration error to avoid, not a runtime bug to fix).
 3. No `UNCONFIRMED` items are anticipated for `/reconcile` — every claim in this plan traces to a
-   file:line read this session, across four sibling repos.
+   file:line read this session, across four sibling repos. (Superseded by item 4 below, logged
+   during Phase 3's live verification attempt.)
+4. **`scripts/e2e-runtime.sh` no longer completes end-to-end.** A live run against
+   `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` (which reports `v0.8.0` at boot,
+   not `v0.8.1` — the published `:latest` tag lags the source repo's release commit; immaterial to
+   this plan since the diff between the two tags touches no `crates/macp-auth` file) found that
+   grpcurl's calls — both the readiness check (`grpcurl ... list`) and the functional calls in
+   `expect_accept`/`expect_reject` — depend on gRPC server reflection, which this runtime build does
+   not expose (`"server does not support the reflection API"`). This phase fixed the readiness
+   check (now a plain TCP-connect, correct regardless of reflection support) but did **not** fix
+   `expect_accept`/`expect_reject`, since doing so needs `grpcurl -proto`/`-protoset` wired to the
+   actual `macp-proto` service definitions — real, separate engineering work (locating/vendoring the
+   right `.proto`, keeping it version-synced, verifying method signatures), not a docs-refresh task.
+   Logged to `ASSUMPTIONS.md` as `UNCONFIRMED` for `/reconcile` to route: is reflection's removal
+   from the runtime intentional (→ file an issue asking for it back, since it's a reasonable
+   dev/debug affordance) or is this repo's script now expected to carry its own `.proto` (→ a real,
+   separate follow-up task)? Either way, **not a blocker** — the offline `src/contract.spec.ts` wire
+   contract pin is unaffected and remains the load-bearing verification.
 
 ## Repo map
 
