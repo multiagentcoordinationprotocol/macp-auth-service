@@ -157,6 +157,12 @@ real macp-runtime v0.8.1 container (requires Docker + `grpcurl`; not wired into
 `npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`.
 See the script header for the manual stale-cache-grace probe.
 
+**Known issue:** the published `macp-runtime:latest` image no longer serves gRPC
+server reflection, which the script's RPC calls depend on — it currently fails
+partway through rather than completing end to end. See `ASSUMPTIONS.md` for the
+tracked follow-up; the offline `src/contract.spec.ts` wire-shape test is unaffected
+and remains the load-bearing check for the runtime contract.
+
 ## Docker
 
 ```bash

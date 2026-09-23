@@ -77,6 +77,33 @@ branch for a readable history and a real restore point.
   typecheck` all green, re-run after every edit in this phase including the gap fixes.
 - This was the last phase. Proceeding to finalization (§4) next.
 
+## Finalization — DONE (2026-09-23)
+
+- Whole-feature verdict: **PASS, ship-ready**, fresh Opus verifier (agent `acdf16012901d6ce8`)
+  reviewing the cumulative `main..HEAD` diff (4 commits) against the plan as a whole, not
+  phase-by-phase. Confirmed: zero production-code drift (`src/config.ts`/`keys.ts`/`server.ts`
+  untouched; only 4 comment lines across two `.spec.ts` files), branch green, tree clean,
+  `CLAUDE.md`'s untracked status handled honestly, `ASSUMPTIONS.md` is `/reconcile`-actionable.
+- 3 non-blocking nits raised, all applied before handoff (not worth a re-verify round — small,
+  textual, no behavior change):
+  1. `README.md` and `scripts/e2e-runtime.sh`'s "what it proves" header both still implied the e2e
+     script fully passes — added a "Known issue" note to both, pointing at `ASSUMPTIONS.md`, so a
+     reader doesn't run it expecting success.
+  2. Plan review's Round 1 item 6 record read as unresolved once Phase 3 corrected it further —
+     annotated with a "Superseded during `/implement` itself" pointer rather than rewritten (keeps
+     the historical record of what Round 1 actually caught).
+  3. `CHANGELOG.md:57-58`'s historical `@types/node@^20.x` entry was flagged as a "twin" of the
+     `CLAUDE.md` staleness Phase 3 fixed — deliberately **not** changed: it's a point-in-time record
+     of what was pinned when that entry was written (true then), not a living invariant statement
+     like `CLAUDE.md`'s dependency-constraints section, so rewriting it would violate this plan's
+     own "don't rewrite historical records" principle from Phase 1.
+- Final regression: `npm test` 54/54, `npm run lint` clean, `npm run typecheck` clean, script
+  syntax-checked (`bash -n`) after the nit edits.
+- Open item carried to `/ship`: Open Question 1 in the plan (file a GitHub issue against
+  `macp-runtime` for its own `docs/deployment.md:292` algorithm-allowlist doc bug) — routed to the
+  user for a go-ahead, per this session's policy on posting to another repo's public tracker.
+- `ASSUMPTIONS.md` has one `UNCONFIRMED` entry — `/reconcile` should run next, scoped to this plan.
+
 ## This repo (`auth-service`)
 
 - `src/config.ts` — env-driven config; `SigningAlg = 'RS256' | 'ES256'`, `parseSigningAlg` throws on

@@ -368,8 +368,15 @@ validation semantics), and found eight defects in the plan's own text:
 6. Phase 3's proposed `CLAUDE.md` wording ("kept at or above the floor") stated the invariant
    backwards — pinning `@types/node` *above* `engines.node`'s floor is the risky direction (untyped
    Node-26-only APIs slip past `tsc`), and the reviewer additionally found CI's `typecheck` job never
-   runs against the Node 20/22 matrix, so the gap is real and uncaught today — **fixed**, Phase 3 now
-   names the actual risk and the CI gap instead of a false safety claim.
+   runs against the Node 20/22 matrix, so the gap is real and uncaught today — **fixed at the time**,
+   Phase 3 named the actual risk and the CI gap instead of a false safety claim. **Superseded during
+   `/implement` itself:** Phase 3's own fresh verifier caught that this round's "CI gap" framing was
+   *also* wrong — `.nvmrc` (`20`) already **is** `engines.node`'s floor, and no CI reconfiguration
+   could catch the mismatch regardless, since `tsc`'s `node:` type view comes from the installed
+   `@types/node` package, not the executing Node binary. See Phase 3's final wording and its
+   "Divergence discovered during `/implement`" notes for the corrected, verified version — this
+   entry is left as-is rather than rewritten, as a record of what Round 1 actually caught (it was a
+   real improvement over the original draft, just not yet the final correct statement).
 7. **Missing:** `docs/integration.md:395`'s `can_manage_mode_registry` description omitted that the
    runtime also gates `RegisterPolicy`/`UnregisterPolicy` on the same scope — **added** to Phase 2.
 8. **Missing:** a malformed `MACP_AUTH_JWKS_JSON` makes the runtime register no JWT resolver at all
