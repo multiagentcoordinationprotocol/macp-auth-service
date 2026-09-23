@@ -1,6 +1,6 @@
 # Plan: re-verify auth-service against macp-runtime v0.8.1 (+ control-plane 0.3.0, sdk-ts 0.11.0, sdk-py 0.9.1)
 
-Status: in progress (Phase 1 of 3 done)
+Status: in progress (Phase 2 of 3 done)
 Owner: auth-service maintainers
 Scope: this repo only (`auth-service`). No code changes to any sibling repo are proposed here.
 Ground truth verified against (all as siblings under `/Users/Shared/multiagentcoordinationprotocol/`):
@@ -110,7 +110,12 @@ rather than asserting "should still be fine."
 
 ### Phase 2 — Document two integration footguns surfaced by the re-verification
 
-**Status:** TODO
+**Status:** DONE — implemented exactly as planned, no divergence. Verified by a fresh Opus agent
+(PASS, round 1): both docs edits landed at the correct locations with accurate content (checked
+against the runtime's actual precedence/error-handling code), the operations.md subsection matches
+the section's existing format, the integration.md table stayed valid, and the baseline suite stayed
+green. One optional nit was raised (empty-string `MACP_AUTH_JWKS_JSON=""` is arguably already
+covered by "malformed") and judged non-blocking, not acted on.
 
 **Delivers:** two operational risks the v0.5.0 pass didn't know about are now written down where an
 operator integrating auth-service with a runtime would actually look.

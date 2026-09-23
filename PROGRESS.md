@@ -17,7 +17,7 @@ branch for a readable history and a real restore point.
 
 1. Re-pin the exact verified-against runtime version (v0.5.0 → v0.8.1). **DONE**
 2. Document two integration footguns (`MACP_AUTH_JWKS_JSON` precedence/malformed-fallback;
-   `can_manage_mode_registry` under-description).
+   `can_manage_mode_registry` under-description). **DONE**
 3. Fix the incidental `CLAUDE.md` `@types/node` doc-freshness gap; full regression pass.
 
 ## Phase log
@@ -31,6 +31,21 @@ branch for a readable history and a real restore point.
   independently by the verifier, not just trusted from the executor's report.
 - No gaps, no assumptions logged (every edit traced directly to a plan-cited file:line).
 - Next: Phase 2 (docs/integration.md + docs/operations.md footguns).
+
+### Phase 2 — DONE (2026-09-22)
+- Verdict: **PASS**, round 1, fresh Opus verifier (agent `a545c52afeb8102ab`), which independently
+  re-checked the `MACP_AUTH_JWKS_JSON` precedence/malformed-fallback claims against
+  `../macp-runtime/crates/macp-auth/src/security.rs:322-338` rather than trusting the plan's own
+  citation.
+- Files touched: `docs/integration.md` (new "Runtime wiring" paragraph at line 243; `Scopes model`
+  table row reworded at line 397), `docs/operations.md` (new `###` subsection under "Common
+  failures", lines 191-196).
+- Gates: `npm test` 54/54, lint, typecheck all still green (docs-only phase; re-run as a baseline
+  check before Phase 3, per the plan's own instruction).
+- No gaps. One optional/non-blocking nit raised by the verifier (empty-string
+  `MACP_AUTH_JWKS_JSON=""` edge case) — judged already covered by the existing "malformed" wording,
+  not worth reopening committed text for.
+- Next: Phase 3 (CLAUDE.md `@types/node` fix + full regression pass).
 
 ## This repo (`auth-service`)
 
