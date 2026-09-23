@@ -82,7 +82,7 @@ branch for a readable history and a real restore point.
 - Whole-feature verdict: **PASS, ship-ready**, fresh Opus verifier (agent `acdf16012901d6ce8`)
   reviewing the cumulative `main..HEAD` diff (4 commits) against the plan as a whole, not
   phase-by-phase. Confirmed: zero production-code drift (`src/config.ts`/`keys.ts`/`server.ts`
-  untouched; only 4 comment lines across two `.spec.ts` files), branch green, tree clean,
+  untouched; only 3 comment lines across two `.spec.ts` files), branch green, tree clean,
   `CLAUDE.md`'s untracked status handled honestly, `ASSUMPTIONS.md` is `/reconcile`-actionable.
 - 3 non-blocking nits raised, all applied before handoff (not worth a re-verify round — small,
   textual, no behavior change):
@@ -102,7 +102,8 @@ branch for a readable history and a real restore point.
 - Open item carried to `/ship`: Open Question 1 in the plan (file a GitHub issue against
   `macp-runtime` for its own `docs/deployment.md:292` algorithm-allowlist doc bug) — routed to the
   user for a go-ahead, per this session's policy on posting to another repo's public tracker.
-- `ASSUMPTIONS.md` has one `UNCONFIRMED` entry — `/reconcile` should run next, scoped to this plan.
+- `ASSUMPTIONS.md`'s one entry has since been reconciled (commit `b991cfd`): status is now
+  `DEFERRED (precisely scoped 2026-09-23)`, recorded in `DECISIONS.md`, not blocking `/ship`.
 
 ## This repo (`auth-service`)
 

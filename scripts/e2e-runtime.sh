@@ -16,13 +16,14 @@
 #   3. A garbage bearer is rejected with UNAUTHENTICATED — proving no dev-mode
 #      "accept any token" fallback leaked in (the v0.5.0 gate change).
 #
-# KNOWN ISSUE (see ASSUMPTIONS.md): expect_accept/expect_reject below call
-# grpcurl without -proto/-protoset, which needs gRPC server reflection to
-# resolve the service by name. The published macp-runtime:latest image no
-# longer serves reflection, so this script currently fails at that step
-# rather than proving 1-3 above. The offline src/contract.spec.ts wire-shape
-# test is unaffected and remains the load-bearing verification in the
-# meantime.
+# KNOWN ISSUE (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
+# below call grpcurl without -proto/-protoset, which needs gRPC server
+# reflection to resolve the service by name. The runtime does not serve
+# reflection (never implemented, not a removed feature — confirmed by a full
+# source + git-history grep of macp-runtime), so this script currently fails
+# at that step rather than proving 1-3 above. The offline src/contract.spec.ts
+# wire-shape test is unaffected and remains the load-bearing verification in
+# the meantime.
 #
 # Manual follow-up (NOT automated here — a timed 1 h grace window is not
 # proportionate to automate): stale-cache-grace probe.
