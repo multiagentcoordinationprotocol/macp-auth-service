@@ -205,3 +205,4 @@ entry and `ASSUMPTIONS.md`'s updated status.
   against the default `MACP_RUNTIME_IMAGE` (published image lacks the opt-in reflection feature) —
   documented as the remaining gap, not fixed here.
 - pushed fix/e2e-runtime-auth-probe 20f0d7b
+- PR #32 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/32
