@@ -105,6 +105,13 @@ branch for a readable history and a real restore point.
 - `ASSUMPTIONS.md`'s one entry has since been reconciled (commit `b991cfd`): status is now
   `DEFERRED (precisely scoped 2026-09-23)`, recorded in `DECISIONS.md`, not blocking `/ship`.
 
+## Ship checkpoints
+
+- `/ship`'s fresh verification gate: round 1 **GAPS** (3 minor doc-accuracy items, all fixed in
+  commit `3a559dc`); round 2 **PASS**.
+- pushed absorb-runtime-v0.8.1 3a559dccd3f821484c1df28aa7ccd3aa4fb3ff28
+- PR #30 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/30
+
 ## This repo (`auth-service`)
 
 - `src/config.ts` — env-driven config; `SigningAlg = 'RS256' | 'ES256'`, `parseSigningAlg` throws on
