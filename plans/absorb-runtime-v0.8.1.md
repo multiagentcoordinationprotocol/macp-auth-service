@@ -318,7 +318,8 @@ rediscover during an incident.
    routed to you rather than auto-filed**, because posting to another repo's public issue tracker is
    an action visible to others and outside this repo's own scope, not because the technical judgment
    is unclear. Recommendation: file it, linking to `../macp-runtime/docs/deployment.md:292` and
-   `security.rs:295-316`, once this plan lands. Say the word and I'll open it.
+   `security.rs:295-316`, once this plan lands. **Filed 2026-09-23:**
+   https://github.com/multiagentcoordinationprotocol/macp-runtime/issues/186.
 2. **The `MACP_AUTH_JWKS_JSON`-precedence footgun (Phase 2)** — decided without escalation: document
    defensively on our side only, do not ask the runtime team to change the precedence behavior
    itself (setting inline JWKS is a legitimate air-gapped-deployment feature; the interaction with a
