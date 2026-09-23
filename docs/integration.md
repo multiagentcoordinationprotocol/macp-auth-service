@@ -240,6 +240,8 @@ When `MACP_AUTH_ISSUER` is set, the runtime's JWT resolver activates and the sta
 
 Dev-mode note (runtime ≥ 0.5.0): with **neither** a JWT issuer nor a static `MACP_AUTH_TOKENS_FILE` configured, the runtime now **refuses to start** unless `MACP_ALLOW_INSECURE=1` is set — it no longer silently falls back to accepting any token. The flag also still gates plaintext (no-TLS) operation. The published runtime Docker image no longer bakes `MACP_ALLOW_INSECURE=1` in, so a bare `docker run` of the runtime image fails fast; pass auth config (as above) or the flag explicitly.
 
+**`MACP_AUTH_JWKS_JSON` precedence (footgun):** the runtime also accepts an inline JWKS via `MACP_AUTH_JWKS_JSON`, for air-gapped deployments that can't reach `MACP_AUTH_JWKS_URL` at all. It checks `MACP_AUTH_JWKS_JSON` **before** `MACP_AUTH_JWKS_URL` — if an operator sets both, the runtime never fetches auth-service's live JWKS endpoint, so rotating the signing key here has no effect until the inline value is updated or removed too. Worse, if `MACP_AUTH_JWKS_JSON` is set but malformed, the runtime logs an error and registers **no** JWT resolver at all — it does not fall back to `MACP_AUTH_JWKS_URL` even when that's also configured, which can silently disable JWT authentication entirely. Prefer `MACP_AUTH_JWKS_URL` alone in any deployment that rotates keys; reserve `MACP_AUTH_JWKS_JSON` for genuinely air-gapped runtimes.
+
 ## Reference snippets: minting
 
 ### TypeScript / Node
@@ -392,7 +394,7 @@ The auth-service serializes scopes verbatim into the `macp_scopes` claim — it 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `can_start_sessions` | boolean | May submit `SessionStart` envelopes. |
-| `can_manage_mode_registry` | boolean | May register/unregister/promote extension modes. |
+| `can_manage_mode_registry` | boolean | May register/unregister/promote extension modes, and register/unregister policies (`RegisterPolicy`/`UnregisterPolicy`). |
 | `is_observer` | boolean | May passive-subscribe to sessions they are not a participant of. |
 | `allowed_modes` | string[] | Non-empty = restrict to these mode ids; empty or omitted = all modes. |
 | `max_open_sessions` | number | Upper bound on concurrent open sessions initiated by this sender. |

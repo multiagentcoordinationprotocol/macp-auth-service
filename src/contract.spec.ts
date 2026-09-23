@@ -7,7 +7,7 @@ import { AuthServiceConfig, SigningAlg } from './config';
 /**
  * Cross-service contract test.
  *
- * Verified against macp-runtime v0.5.0 (`macp-runtime/crates/macp-auth`,
+ * Verified against macp-runtime v0.8.1 (`macp-runtime/crates/macp-auth`,
  * jsonwebtoken 9.3.x). The auth-service mints tokens that the runtime's JWT
  * resolver verifies and deserializes into:
  *
@@ -25,7 +25,7 @@ import { AuthServiceConfig, SigningAlg } from './config';
  * control-plane minter, and the examples-service minter all depend on.
  *
  * Algorithm note: this service mints RS256 or ES256, both inside the runtime's
- * default `MACP_AUTH_JWT_ALGS` allowlist (RS256,ES256) as of v0.5.0. HS256 is
+ * default `MACP_AUTH_JWT_ALGS` allowlist (RS256,ES256) as of v0.8.1. HS256 is
  * outside that default allowlist and this service cannot mint it either.
  */
 

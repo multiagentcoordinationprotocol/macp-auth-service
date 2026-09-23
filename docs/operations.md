@@ -188,6 +188,12 @@ Check:
 
 Regenerate the JWK using the command in the [Deployment Guide](deployment.md#signing-key-generation) and re-inject.
 
+### Runtime keeps accepting a rotated-out key indefinitely, or doesn't seem to enforce JWT auth at all
+
+Check whether the runtime has `MACP_AUTH_JWKS_JSON` set:
+- If set, it takes precedence over `MACP_AUTH_JWKS_URL` (checked first) and freezes the key set at whatever was baked into that env var — rotation via the live JWKS endpoint has no effect until the inline value is updated or removed. Prefer `MACP_AUTH_JWKS_URL` alone in any deployment that rotates keys.
+- If `MACP_AUTH_JWKS_JSON` is set but malformed, the runtime registers **no** JWT resolver at all — it does not fall back to `MACP_AUTH_JWKS_URL` even if that's also configured. This can silently disable JWT authentication entirely. Check the runtime's startup logs for a JWKS-parse error whenever tokens minted here aren't being verified as expected.
+
 ## Abuse mitigation
 
 `POST /tokens` has no rate limit, no caller authentication by default, and no audit log. If the endpoint is reachable beyond a trusted perimeter, assume abuse is possible.

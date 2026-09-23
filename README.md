@@ -153,9 +153,16 @@ npm run typecheck    # tsc --noEmit
 ### End-to-end against a live runtime (opt-in)
 
 `scripts/e2e-runtime.sh` mints RS256 and ES256 tokens and verifies them against a
-real macp-runtime v0.5.0 container (requires Docker + `grpcurl`; not wired into
+real macp-runtime v0.8.1 container (requires Docker + `grpcurl`; not wired into
 `npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`.
 See the script header for the manual stale-cache-grace probe.
+
+**Known issue:** the runtime does not serve gRPC server reflection (never
+implemented, not a removed feature — see `DECISIONS.md`), which the script's RPC
+calls depend on — it currently fails partway through rather than completing end
+to end. See `ASSUMPTIONS.md` for the tracked follow-up; the offline
+`src/contract.spec.ts` wire-shape test is unaffected and remains the
+load-bearing check for the runtime contract.
 
 ## Docker
 

@@ -3,7 +3,7 @@ import { loadKey } from './keys';
 import type { SigningAlg } from './config';
 
 describe('JWKS key contract — kid / alg / use', () => {
-  // Runtime v0.5.0 selects the verifying key in O(1) by `kid` and rejects any
+  // Runtime v0.8.1 selects the verifying key in O(1) by `kid` and rejects any
   // header `alg` outside its allowlist. Every key we serve must therefore carry
   // a string `kid`, an `alg` in {RS256, ES256}, and `use: "sig"`. This turns the
   // guarantee the runtime's fast path relies on into an explicit contract.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # e2e-runtime.sh — end-to-end verification of the auth-service against a live
-# macp-runtime v0.5.0 verifier.
+# macp-runtime v0.8.1 verifier.
 #
 # This is OPT-IN and is NOT wired into `npm test`. It requires Docker (and
 # grpcurl) and stands up a real runtime, so it is not appropriate for the
@@ -15,6 +15,15 @@
 #   2. The same holds for ES256 (MACP_AUTH_SIGNING_ALG=ES256).
 #   3. A garbage bearer is rejected with UNAUTHENTICATED — proving no dev-mode
 #      "accept any token" fallback leaked in (the v0.5.0 gate change).
+#
+# KNOWN ISSUE (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
+# below call grpcurl without -proto/-protoset, which needs gRPC server
+# reflection to resolve the service by name. The runtime does not serve
+# reflection (never implemented, not a removed feature — confirmed by a full
+# source + git-history grep of macp-runtime), so this script currently fails
+# at that step rather than proving 1-3 above. The offline src/contract.spec.ts
+# wire-shape test is unaffected and remains the load-bearing verification in
+# the meantime.
 #
 # Manual follow-up (NOT automated here — a timed 1 h grace window is not
 # proportionate to automate): stale-cache-grace probe.
@@ -111,8 +120,17 @@ start_runtime() {
     -e MACP_ALLOW_INSECURE=1 \
     -e MACP_BIND_ADDR="0.0.0.0:${RUNTIME_GRPC_PORT}" \
     "${MACP_RUNTIME_IMAGE}" >/dev/null
+  # Plain TCP-connect readiness check: the published runtime image does not serve
+  # the gRPC reflection API (`grpcurl ... list` fails with "server does not
+  # support the reflection API" even once fully up), so reflection can't be used
+  # as a liveness probe here. A bare connect is sufficient — the real protocol-level
+  # checks are expect_accept/expect_reject below, which call the actual RPC.
+  # Note: Docker's -p publisher can accept a connection slightly before the
+  # runtime process inside the container finishes binding; harmless here since
+  # expect_accept/expect_reject retry-free calls would themselves surface a
+  # premature connection as a clear failure, not a false pass.
   for _ in $(seq 1 50); do
-    if grpcurl -plaintext "127.0.0.1:${RUNTIME_GRPC_PORT}" list >/dev/null 2>&1; then return 0; fi
+    if (exec 3<>"/dev/tcp/127.0.0.1/${RUNTIME_GRPC_PORT}") 2>/dev/null; then return 0; fi
     sleep 0.2
   done
   docker logs "${RUNTIME_NAME}" >&2 || true
