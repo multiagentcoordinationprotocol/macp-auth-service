@@ -38,4 +38,12 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   (`4836ea7`, `48bfc7c`, `b6e8f58`, `7815a97`, `a24ca65`) touch no file under `crates/macp-auth`, so
   this lag is immaterial to this plan's wire-contract conclusions — noted so a future reader doesn't
   mistake it for a fresh discrepancy.
-- **Status:** UNCONFIRMED
+- **Status:** DEFERRED (precisely scoped 2026-09-23 via `/reconcile` — see `DECISIONS.md`). Root
+  cause confirmed: reflection was never implemented in `macp-runtime` (zero hits for `reflection` in
+  its source or git history) — not a hardening removal, so no security rationale blocks adding it.
+  The local fix is cheaper than assumed: `MACPRuntimeService` is already published as
+  `@multiagentcoordinationprotocol/proto` (npm) / `macp-proto` (crates.io) — `grpcurl -import-path …
+  -proto macp/v1/core.proto` needs no vendoring. Filing a nice-to-have issue against `macp-runtime`
+  was also recommended, batched with a separate open ask from this same plan and routed to the
+  session owner rather than filed automatically. Neither the local fix nor the upstream issue block
+  anything — the offline `src/contract.spec.ts` wire-shape pin remains the load-bearing check.
