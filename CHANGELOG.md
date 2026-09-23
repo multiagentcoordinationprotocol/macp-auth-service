@@ -59,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Re-verified against macp-runtime v0.8.1, macp-control-plane v0.3.0,
   macp-sdk-typescript v0.11.0, and macp-sdk-python v0.9.1 — no wire-contract
   or behavior drift found; see `plans/absorb-runtime-v0.8.1.md`.
+- `scripts/e2e-runtime.sh`: `expect_accept`/`expect_reject` now probe
+  `ListSessions` instead of `Initialize`, which never checked authentication in
+  any version of macp-runtime and so could never actually prove accept/reject
+  behavior. Script now passes fully end to end against a runtime built with
+  macp-runtime's new opt-in `reflection` Cargo feature (landed on `main` after
+  the v0.8.1 release, PR #188; not present in the published `ghcr.io` image);
+  see `DECISIONS.md`.
 
 ## [1.0.0] — 2026-04-18
 

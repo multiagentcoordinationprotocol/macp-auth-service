@@ -164,9 +164,11 @@ TOKEN=$(curl -sS -X POST http://localhost:3200/tokens \
   -d '{"sender":"operator:alice","scopes":{"can_start_sessions":true}}' \
   | jq -r .token)
 
-# Use the token with grpcurl to hit the runtime
+# Use the token with grpcurl to hit the runtime (ListSessions, not Initialize:
+# Initialize never checks authentication, so it can't be used to confirm the
+# bearer was accepted — see scripts/e2e-runtime.sh for the full explanation)
 grpcurl -H "authorization: Bearer ${TOKEN}" -d '{}' \
-  macp-runtime:50051 macp.v1.MACPRuntimeService/Initialize
+  macp-runtime:50051 macp.v1.MACPRuntimeService/ListSessions
 ```
 
 ## Bearer pattern: SDK agents

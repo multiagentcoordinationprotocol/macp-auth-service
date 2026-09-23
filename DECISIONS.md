@@ -48,3 +48,49 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
 - **Status:** `ASSUMPTIONS.md`'s entry updated to `DEFERRED (precisely scoped 2026-09-23)` — no
   longer a vague "real, separate engineering work," but not resolved either. Revisit next time
   someone needs a working live e2e run, or as a standalone small feature.
+
+## 2026-09-23 — Follow-up: macp-runtime reflection landed, e2e script fixed and verified
+
+- **Trigger:** the session owner reported `macp-runtime` issues #186 (doc bug) and #187
+  (reflection nice-to-have, filed above) both fixed. Verified rather than trusted: both issues
+  show `CLOSED`; the closing PR is `macp-runtime` #188, commit `1d0b2a7579264b63b6f2f2e7887ca9ae55e3cb9a`,
+  merged 2026-09-23T17:29:45Z. Read its full diff — the doc fix corrects the JWT algorithm allowlist
+  wording in `docs/deployment.md`/`README.md`, and reflection is added via `tonic-reflection` behind
+  a new, non-default `reflection` Cargo feature (opt-in `build.rs`/`src/main.rs`/`Cargo.toml` changes,
+  a new `tests/reflection.rs`, a feature-gated CI job) — never in the published Docker image, per the
+  PR's own description and a check of its `Dockerfile` (bare `cargo build --release`, no build-args).
+- **Empirical verification, not just trusting the PR description:** native `cargo build --features
+  reflection` failed locally on an unrelated macOS SDK/linker issue (`tapi error`, arm64e.x1-macos in
+  a `MacOSX27.0.sdk`) — not caused by the code. Built via Docker instead: a temporary
+  `Dockerfile.reflection` written to this session's scratchpad (never inside `macp-runtime` — that
+  repo was never modified) adds `--features reflection` to the build step, using `macp-runtime` only
+  as build context. Ran `MACP_RUNTIME_IMAGE=macp-runtime-reflection:local scripts/e2e-runtime.sh`
+  against the result.
+- **First run:** got past the old reflection error entirely, confirming the fix is real, but hit a
+  new one: `INVALID_REQUEST: supported_protocol_versions must not be empty` — `Initialize`'s request
+  proto (`message InitializeRequest` at `core.proto:72`) requires it, and `macp-core::MACP_VERSION`
+  is `"1.0"`. Traced and about to patch the request body when a second look at the handler
+  (`src/server.rs:792-857`) showed
+  `initialize()` never calls `authenticate_metadata` at all, in this build or (per a full git-history
+  check of `src/server.rs`) any prior one. **`expect_accept`/`expect_reject` had been probing the
+  wrong RPC from the start** — one that would accept any bearer regardless of validity — so even a
+  hypothetical past run that got past the reflection error could never actually have proven RS256/
+  ES256 acceptance or garbage-bearer rejection. This predates and is independent of the reflection
+  gap; it was simply never reachable until reflection started resolving the service.
+- **Fix:** retargeted both `expect_accept` and `expect_reject` in `scripts/e2e-runtime.sh` to
+  `ListSessions`, which checks `authenticate_metadata` as its first statement, before request-shape
+  validation (`src/server.rs:1274-1278`, preceded by a comment at `:1271-1273` confirming this
+  ordering is deliberate), and
+  takes an all-optional request (`{}` is valid). Re-ran: `PASS: RS256 token accepted`, `PASS: garbage
+  bearer rejected with UNAUTHENTICATED`, `PASS: ES256 token accepted`, `ALL CHECKS PASSED`.
+- **What's still open:** the published `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest`
+  image still lacks the `reflection` feature (it's opt-in, not default), so `scripts/e2e-runtime.sh`
+  run with its default `MACP_RUNTIME_IMAGE` still fails at that step — only a locally-built
+  `--features reflection` runtime (or a local binary via `MACP_RUNTIME_BIN`) gets a fully-automated
+  pass today. Wiring `-proto`/`-protoset` against the published `macp-proto` schema so the default
+  image works too remains the deferred follow-up named in the entry above — not done in this pass,
+  still bigger than a script fix.
+- **Decided by:** Opus, not escalated — reversible, opt-in dev-script-only change; no production
+  code touched; the offline `src/contract.spec.ts` wire-shape pin is unaffected either way.
+- **Status:** `ASSUMPTIONS.md`'s entry updated to `RESOLVED-UPSTREAM, LOCAL-FIX-VERIFIED
+  (2026-09-23)`. Local-only full pass confirmed; default-image full pass remains future work.

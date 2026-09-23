@@ -16,14 +16,24 @@
 #   3. A garbage bearer is rejected with UNAUTHENTICATED — proving no dev-mode
 #      "accept any token" fallback leaked in (the v0.5.0 gate change).
 #
-# KNOWN ISSUE (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
-# below call grpcurl without -proto/-protoset, which needs gRPC server
-# reflection to resolve the service by name. The runtime does not serve
-# reflection (never implemented, not a removed feature — confirmed by a full
-# source + git-history grep of macp-runtime), so this script currently fails
-# at that step rather than proving 1-3 above. The offline src/contract.spec.ts
-# wire-shape test is unaffected and remains the load-bearing verification in
-# the meantime.
+# expect_accept/expect_reject probe with ListSessions, not Initialize:
+# Initialize never calls authenticate_metadata (confirmed by source read +
+# full git history of macp-runtime's src/server.rs — no auth check was ever
+# added to it, in any version), so it would accept any bearer, valid or
+# garbage, and could never actually prove 1-3 above. ListSessions checks auth
+# as its first statement, before request-shape validation.
+#
+# REFLECTION (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
+# call grpcurl without -proto/-protoset, which needs gRPC server reflection to
+# resolve the service by name. macp-runtime added opt-in reflection support on
+# `main`, after the v0.8.1 release (issues #186/#187, PR #188), behind a
+# non-default `reflection` Cargo feature — it is NOT built into the published
+# ghcr.io image (and is not yet in any tagged release), so this script
+# still fails at that step against the default MACP_RUNTIME_IMAGE. Confirmed
+# 2026-09-23 to pass fully end-to-end (RS256 accept, ES256 accept, garbage
+# reject) against a local image built with `--features reflection`. The
+# offline src/contract.spec.ts wire-shape test is unaffected either way and
+# remains the load-bearing verification for a default/CI-less run.
 #
 # Manual follow-up (NOT automated here — a timed 1 h grace window is not
 # proportionate to automate): stale-cache-grace probe.
@@ -144,12 +154,22 @@ mint() {
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).token))'
 }
 
-# Expect a successful Initialize with the given bearer.
+# ListSessions, not Initialize, is the auth probe: Initialize never calls
+# authenticate_metadata (confirmed by source read + full git history of
+# src/server.rs — no auth check was ever added to it, in any runtime version),
+# so it accepts *any* bearer, valid or garbage, as long as
+# supported_protocol_versions is populated. ListSessions checks auth as its
+# first statement, deliberately before request-shape validation
+# (src/server.rs:1274-1278), and takes an all-optional request ({} is valid:
+# page_size=0 means server-chosen default, page_token="" means first page).
+LIST_SESSIONS_BODY='{}'
+
+# Expect a successful ListSessions with the given bearer.
 expect_accept() {
   local token="$1" label="$2"
   if grpcurl -plaintext \
-      -H "authorization: Bearer ${token}" -d '{}' \
-      "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/Initialize >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
+      -H "authorization: Bearer ${token}" -d "${LIST_SESSIONS_BODY}" \
+      "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/ListSessions >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
     log "PASS: ${label} accepted"
   else
     cat /tmp/${RUNTIME_NAME}.err >&2 || true
@@ -161,8 +181,8 @@ expect_accept() {
 expect_reject() {
   local token="$1" label="$2"
   if grpcurl -plaintext \
-      -H "authorization: Bearer ${token}" -d '{}' \
-      "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/Initialize >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
+      -H "authorization: Bearer ${token}" -d "${LIST_SESSIONS_BODY}" \
+      "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/ListSessions >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
     fail "${label}: expected UNAUTHENTICATED, but call succeeded"
   fi
   if grep -qi 'Unauthenticated' /tmp/${RUNTIME_NAME}.err; then
