@@ -34,9 +34,9 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
   1. **Filing a GitHub issue against `macp-runtime`** asking for reflection support is reasonable
      (it's a plausible, low-cost dev/debug affordance many teams add, and there's no hardening
      reason not to) — but it's a **nice-to-have, not an unblock**, since the real fix doesn't depend
-     on it. **Not filed by this pass** — posting to another repo's public tracker needs the session
-     owner's explicit go-ahead, batched with the plan's separate Open Question 1
-     (the `docs/deployment.md:292` doc-bug issue) and surfaced together at the end of this session.
+     on it. **Filed 2026-09-23**, after the session owner's go-ahead (batched with the plan's
+     separate Open Question 1, the `docs/deployment.md:292` doc-bug issue):
+     https://github.com/multiagentcoordinationprotocol/macp-runtime/issues/187.
   2. **The local fix is a well-scoped, deferred follow-up**, not done in this pass: it means adding
      a new devDependency (`@multiagentcoordinationprotocol/proto`) and rewriting
      `expect_accept`/`expect_reject`'s `grpcurl` invocations in `scripts/e2e-runtime.sh` to pass

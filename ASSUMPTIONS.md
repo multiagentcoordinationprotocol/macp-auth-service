@@ -43,7 +43,8 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   its source or git history) — not a hardening removal, so no security rationale blocks adding it.
   The local fix is cheaper than assumed: `MACPRuntimeService` is already published as
   `@multiagentcoordinationprotocol/proto` (npm) / `macp-proto` (crates.io) — `grpcurl -import-path …
-  -proto macp/v1/core.proto` needs no vendoring. Filing a nice-to-have issue against `macp-runtime`
-  was also recommended, batched with a separate open ask from this same plan and routed to the
-  session owner rather than filed automatically. Neither the local fix nor the upstream issue block
-  anything — the offline `src/contract.spec.ts` wire-shape pin remains the load-bearing check.
+  -proto macp/v1/core.proto` needs no vendoring. A nice-to-have issue was filed against
+  `macp-runtime` (2026-09-23, after the session owner's go-ahead):
+  https://github.com/multiagentcoordinationprotocol/macp-runtime/issues/187. Neither that issue nor
+  the still-deferred local fix block anything — the offline `src/contract.spec.ts` wire-shape pin
+  remains the load-bearing check.
