@@ -15,10 +15,22 @@ branch for a readable history and a real restore point.
 
 ## Phase list
 
-1. Re-pin the exact verified-against runtime version (v0.5.0 → v0.8.1).
+1. Re-pin the exact verified-against runtime version (v0.5.0 → v0.8.1). **DONE**
 2. Document two integration footguns (`MACP_AUTH_JWKS_JSON` precedence/malformed-fallback;
    `can_manage_mode_registry` under-description).
 3. Fix the incidental `CLAUDE.md` `@types/node` doc-freshness gap; full regression pass.
+
+## Phase log
+
+### Phase 1 — DONE (2026-09-22)
+- Verdict: **PASS**, round 1, fresh Opus verifier (agent `a6ce848d7592482b9`).
+- Files touched: `src/contract.spec.ts` (2 comment lines), `src/keys.spec.ts` (1 comment line),
+  `README.md:156`, `scripts/e2e-runtime.sh:4`, `CHANGELOG.md` (1 additive bullet under
+  `[Unreleased] > Changed`).
+- Gates: `npm test` 54/54 passed, `npm run lint` clean, `npm run typecheck` clean — all re-run
+  independently by the verifier, not just trusted from the executor's report.
+- No gaps, no assumptions logged (every edit traced directly to a plan-cited file:line).
+- Next: Phase 2 (docs/integration.md + docs/operations.md footguns).
 
 ## This repo (`auth-service`)
 

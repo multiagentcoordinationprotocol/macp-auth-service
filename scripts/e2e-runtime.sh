@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # e2e-runtime.sh — end-to-end verification of the auth-service against a live
-# macp-runtime v0.5.0 verifier.
+# macp-runtime v0.8.1 verifier.
 #
 # This is OPT-IN and is NOT wired into `npm test`. It requires Docker (and
 # grpcurl) and stands up a real runtime, so it is not appropriate for the

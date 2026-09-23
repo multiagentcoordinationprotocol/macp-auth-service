@@ -1,6 +1,6 @@
 # Plan: re-verify auth-service against macp-runtime v0.8.1 (+ control-plane 0.3.0, sdk-ts 0.11.0, sdk-py 0.9.1)
 
-Status: proposed (not started)
+Status: in progress (Phase 1 of 3 done)
 Owner: auth-service maintainers
 Scope: this repo only (`auth-service`). No code changes to any sibling repo are proposed here.
 Ground truth verified against (all as siblings under `/Users/Shared/multiagentcoordinationprotocol/`):
@@ -55,7 +55,9 @@ the prior plan already phrased guidance as a floor ("runtime ≥ 0.5.0"), that t
 
 ### Phase 1 — Re-pin the exact verified-against runtime version (v0.5.0 → v0.8.1)
 
-**Status:** TODO
+**Status:** DONE — implemented exactly as planned, no divergence. Verified by a fresh Opus agent
+(PASS, round 1): all five files match the Files list, `scripts/e2e-runtime.sh:17` and the
+`>= 0.5.0` floor lines were correctly left untouched, `npm test`/`lint`/`typecheck` all green.
 
 **Delivers:** every place that asserts an *exact* runtime version as the one this service's contract
 was last verified against says v0.8.1, backed by the citations gathered in this plan's Context —

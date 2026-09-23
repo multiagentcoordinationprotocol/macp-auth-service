@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `createLocalJWKSet`) are available in v5.
 - Pinned `typescript` to `^5.6.3` and `@types/node` to `^20.x` to align with
   the rest of the monorepo toolchain.
+- Re-verified against macp-runtime v0.8.1, macp-control-plane v0.3.0,
+  macp-sdk-typescript v0.11.0, and macp-sdk-python v0.9.1 — no wire-contract
+  or behavior drift found; see `plans/absorb-runtime-v0.8.1.md`.
 
 ## [1.0.0] — 2026-04-18
 
