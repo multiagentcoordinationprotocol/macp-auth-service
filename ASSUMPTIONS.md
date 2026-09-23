@@ -38,13 +38,26 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   (`4836ea7`, `48bfc7c`, `b6e8f58`, `7815a97`, `a24ca65`) touch no file under `crates/macp-auth`, so
   this lag is immaterial to this plan's wire-contract conclusions — noted so a future reader doesn't
   mistake it for a fresh discrepancy.
-- **Status:** DEFERRED (precisely scoped 2026-09-23 via `/reconcile` — see `DECISIONS.md`). Root
-  cause confirmed: reflection was never implemented in `macp-runtime` (zero hits for `reflection` in
-  its source or git history) — not a hardening removal, so no security rationale blocks adding it.
-  The local fix is cheaper than assumed: `MACPRuntimeService` is already published as
-  `@multiagentcoordinationprotocol/proto` (npm) / `macp-proto` (crates.io) — `grpcurl -import-path …
-  -proto macp/v1/core.proto` needs no vendoring. A nice-to-have issue was filed against
-  `macp-runtime` (2026-09-23, after the session owner's go-ahead):
-  https://github.com/multiagentcoordinationprotocol/macp-runtime/issues/187. Neither that issue nor
-  the still-deferred local fix block anything — the offline `src/contract.spec.ts` wire-shape pin
-  remains the load-bearing check.
+- **Status:** RESOLVED-UPSTREAM, LOCAL-FIX-VERIFIED (2026-09-23). Root cause confirmed: reflection
+  was never implemented in `macp-runtime` (zero hits for `reflection` in its source or git history,
+  at the time of the original investigation, pre-PR-#188)
+  — not a hardening removal, so no security rationale blocked adding it. A nice-to-have issue was
+  filed against `macp-runtime` (2026-09-23, after the session owner's go-ahead):
+  https://github.com/multiagentcoordinationprotocol/macp-runtime/issues/187 — **fixed same day**
+  via `macp-runtime` PR #188 (commit `1d0b2a7`): reflection is now available behind a non-default
+  `reflection` Cargo feature, off by default and **not built into the published `ghcr.io` image**.
+  Empirically verified 2026-09-23: built a local runtime image with `--features reflection`
+  (scratchpad-only Dockerfile, macp-runtime repo untouched) and ran `scripts/e2e-runtime.sh`
+  against it — reflection resolved cleanly, and the script now passes fully end to end.
+  That run also surfaced a second, independent bug in the script itself: `expect_accept`/
+  `expect_reject` targeted `Initialize`, which never calls `authenticate_metadata` in any version
+  of `macp-runtime` (confirmed via full git history of `src/server.rs`) — so it would have accepted
+  *any* bearer, valid or garbage, once past the reflection error, and could never actually have
+  proven acceptance/rejection. Fixed by retargeting both to `ListSessions`, which checks auth first
+  (`src/server.rs:1271-1277`). Remaining gap: **the script still fails against the default
+  `MACP_RUNTIME_IMAGE`** (published `:latest`), since that image doesn't build in the reflection
+  feature — a full default run still needs either a locally-built `--features reflection` runtime,
+  or the still-undone `-proto`/`-protoset` wiring against the published `macp-proto` schema
+  (`DECISIONS.md`'s "well-scoped, deferred follow-up," not done here — bigger than a script fix,
+  a real feature addition with its own devDependency). The offline `src/contract.spec.ts`
+  wire-shape pin remains the load-bearing check for a default/CI-less run.

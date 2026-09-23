@@ -185,3 +185,24 @@ than relying on CHANGELOGs/commit messages alone, per the `/plan` skill's "code 
 rule. All four returned "no drift" independently; findings cross-checked against each other for
 consistency (e.g. both SDKs independently confirmed the `@types/node` pattern; the control-plane and
 runtime audits independently confirmed the same 5-field `macp_scopes` shape).
+
+## Follow-up: e2e-runtime.sh auth-probe fix (2026-09-23)
+
+Triggered by macp-runtime issues #186/#187 (filed above) both being fixed upstream via PR #188.
+Verified the fix empirically (local `--features reflection` Docker build, macp-runtime repo
+untouched) and, in the process, found and fixed an independent pre-existing bug: `expect_accept`/
+`expect_reject` probed `Initialize`, which never checks authentication in any version of
+macp-runtime — retargeted to `ListSessions`. Full account in `DECISIONS.md`'s 2026-09-23 follow-up
+entry and `ASSUMPTIONS.md`'s updated status.
+
+- Verification gate: fresh Opus subagent — **PASS**, 4 documentation-accuracy nits (a stale
+  "v0.8.1" characterization of when reflection landed; the same Initialize-anti-pattern in
+  `docs/integration.md`; three `file:line` citation nits; one sentence in `ASSUMPTIONS.md` that
+  read as re-runnable present tense). All four closed before commit.
+- Regression: `npm test` 54/54, `npm run lint` clean, `npm run typecheck` clean, `bash -n` clean.
+- Live e2e: `MACP_RUNTIME_IMAGE=macp-runtime-reflection:local scripts/e2e-runtime.sh` — RS256
+  accept, garbage-bearer UNAUTHENTICATED reject, ES256 accept, `ALL CHECKS PASSED`. Still fails
+  against the default `MACP_RUNTIME_IMAGE` (published image lacks the opt-in reflection feature) —
+  documented as the remaining gap, not fixed here.
+- pushed fix/e2e-runtime-auth-probe 20f0d7b
+- PR #32 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/32
