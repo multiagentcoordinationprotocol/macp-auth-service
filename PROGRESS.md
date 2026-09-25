@@ -255,3 +255,4 @@ splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that p
   `git commit --amend`. `MACP_PROTO_VERSION`'s input-validation guard was independently
   fuzz-tested by the verifier (16 cases) and confirmed correct.
 - pushed fix/e2e-runtime-proto-resolution 0b66fb4
+- PR #33 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/33
