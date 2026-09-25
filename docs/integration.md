@@ -166,8 +166,13 @@ TOKEN=$(curl -sS -X POST http://localhost:3200/tokens \
 
 # Use the token with grpcurl to hit the runtime (ListSessions, not Initialize:
 # Initialize never checks authentication, so it can't be used to confirm the
-# bearer was accepted — see scripts/e2e-runtime.sh for the full explanation)
-grpcurl -H "authorization: Bearer ${TOKEN}" -d '{}' \
+# bearer was accepted — see scripts/e2e-runtime.sh for the full explanation).
+# -import-path/-proto resolve the service from the schema directly: don't
+# assume the target runtime serves gRPC reflection (it's an opt-in, non-default
+# feature — most deployments, including the published image, won't have it).
+# PROTO_DIR here is wherever your own macp-proto/schema checkout lives.
+grpcurl -import-path "${PROTO_DIR}" -proto macp/v1/core.proto \
+  -H "authorization: Bearer ${TOKEN}" -d '{}' \
   macp-runtime:50051 macp.v1.MACPRuntimeService/ListSessions
 ```
 
