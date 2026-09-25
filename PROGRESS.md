@@ -249,3 +249,9 @@ splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that p
 - Files touched: `scripts/e2e-runtime.sh`, `README.md`, `docs/integration.md`, `CHANGELOG.md`,
   `ASSUMPTIONS.md`, `DECISIONS.md`, `plans/e2e-runtime-proto-resolution.md`, `PROGRESS.md`.
 - What's next: commit, then `/ship` (push, PR, CI watch, squash-merge).
+- `/ship` verification gate: fresh Opus subagent, full `git diff main...HEAD` — **PASS**, one cosmetic
+  nit (script header still said "v0.8.1 verifier" after README dropped that version-specific
+  wording in the same diff) — fixed and folded into the same unpushed commit via
+  `git commit --amend`. `MACP_PROTO_VERSION`'s input-validation guard was independently
+  fuzz-tested by the verifier (16 cases) and confirmed correct.
+- pushed fix/e2e-runtime-proto-resolution 0b66fb4
