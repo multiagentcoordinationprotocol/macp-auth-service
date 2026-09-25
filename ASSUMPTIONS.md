@@ -38,7 +38,7 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   (`4836ea7`, `48bfc7c`, `b6e8f58`, `7815a97`, `a24ca65`) touch no file under `crates/macp-auth`, so
   this lag is immaterial to this plan's wire-contract conclusions — noted so a future reader doesn't
   mistake it for a fresh discrepancy.
-- **Status:** RESOLVED-UPSTREAM, LOCAL-FIX-VERIFIED (2026-09-23). Root cause confirmed: reflection
+- **Status:** RESOLVED (2026-09-25). Root cause confirmed: reflection
   was never implemented in `macp-runtime` (zero hits for `reflection` in its source or git history,
   at the time of the original investigation, pre-PR-#188)
   — not a hardening removal, so no security rationale blocked adding it. A nice-to-have issue was
@@ -48,16 +48,23 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   `reflection` Cargo feature, off by default and **not built into the published `ghcr.io` image**.
   Empirically verified 2026-09-23: built a local runtime image with `--features reflection`
   (scratchpad-only Dockerfile, macp-runtime repo untouched) and ran `scripts/e2e-runtime.sh`
-  against it — reflection resolved cleanly, and the script now passes fully end to end.
+  against it — reflection resolved cleanly, and the script passed fully end to end.
   That run also surfaced a second, independent bug in the script itself: `expect_accept`/
   `expect_reject` targeted `Initialize`, which never calls `authenticate_metadata` in any version
   of `macp-runtime` (confirmed via full git history of `src/server.rs`) — so it would have accepted
   *any* bearer, valid or garbage, once past the reflection error, and could never actually have
   proven acceptance/rejection. Fixed by retargeting both to `ListSessions`, which checks auth first
-  (`src/server.rs:1271-1277`). Remaining gap: **the script still fails against the default
-  `MACP_RUNTIME_IMAGE`** (published `:latest`), since that image doesn't build in the reflection
-  feature — a full default run still needs either a locally-built `--features reflection` runtime,
-  or the still-undone `-proto`/`-protoset` wiring against the published `macp-proto` schema
-  (`DECISIONS.md`'s "well-scoped, deferred follow-up," not done here — bigger than a script fix,
-  a real feature addition with its own devDependency). The offline `src/contract.spec.ts`
-  wire-shape pin remains the load-bearing check for a default/CI-less run.
+  (`src/server.rs:1274-1278`).
+  **Remaining gap closed 2026-09-25** (`plans/e2e-runtime-proto-resolution.md`): the script no
+  longer depends on reflection at all — `expect_accept`/`expect_reject` resolve
+  `macp.v1.MACPRuntimeService` client-side via `grpcurl -import-path`/`-proto`, sourcing the three
+  needed `.proto` files (`envelope.proto`, `core.proto`, `policy.proto` — the exact set
+  `macp-runtime`'s own `build.rs` compiles for the same service) from, in priority order: an
+  explicit `MACP_PROTO_DIR` override, a sibling `../multiagentcoordinationprotocol` checkout, or a
+  pinned-tag fetch (`MACP_PROTO_VERSION`, default `proto-v0.1.10`) from that public repo's raw
+  GitHub content — no authentication needed, unlike the GitHub-Packages-only npm package this
+  entry's prior text imprecisely called "already published" (see `DECISIONS.md`'s 2026-09-25 entry
+  for the correction). Verified live: the script now passes `ALL CHECKS PASSED` against the real,
+  default, published `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image, with no
+  local build and no Cargo feature required. `docs/integration.md`'s Pattern 3 example had the
+  identical reflection-dependency gap and was fixed alongside. Nothing outstanding.

@@ -153,19 +153,18 @@ npm run typecheck    # tsc --noEmit
 ### End-to-end against a live runtime (opt-in)
 
 `scripts/e2e-runtime.sh` mints RS256 and ES256 tokens and verifies them against a
-real macp-runtime v0.8.1 container (requires Docker + `grpcurl`; not wired into
+real macp-runtime container (requires Docker + `grpcurl`; not wired into
 `npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`.
 See the script header for the manual stale-cache-grace probe.
 
-**Known issue:** the script's RPC calls depend on gRPC server reflection to
-resolve the service by name. The published `ghcr.io` runtime image does not
-serve reflection — it's an opt-in, non-default Cargo feature added on
-`macp-runtime` `main` after the v0.8.1 release (PR #188; see `DECISIONS.md`)
-— so a default run fails partway through rather than completing end to end.
-It passes fully against a runtime built with `--features reflection`. See
-`ASSUMPTIONS.md` for the tracked follow-up; the offline `src/contract.spec.ts`
-wire-shape test is unaffected either way and remains the load-bearing check
-for the runtime contract.
+The script resolves `macp.v1.MACPRuntimeService` client-side from the versioned
+`.proto` schema (`grpcurl -import-path`/`-proto`), not via gRPC server
+reflection, so it passes fully end to end against the real, default,
+published `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image —
+no local build or Cargo feature required. See `ASSUMPTIONS.md`/`DECISIONS.md`
+for how the `.proto` files are sourced and the history of this fix; the
+offline `src/contract.spec.ts` wire-shape test remains the load-bearing check
+for the runtime contract in CI, where this opt-in script doesn't run.
 
 ## Docker
 

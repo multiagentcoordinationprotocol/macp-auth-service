@@ -62,10 +62,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/e2e-runtime.sh`: `expect_accept`/`expect_reject` now probe
   `ListSessions` instead of `Initialize`, which never checked authentication in
   any version of macp-runtime and so could never actually prove accept/reject
-  behavior. Script now passes fully end to end against a runtime built with
-  macp-runtime's new opt-in `reflection` Cargo feature (landed on `main` after
-  the v0.8.1 release, PR #188; not present in the published `ghcr.io` image);
-  see `DECISIONS.md`.
+  behavior.
+- `scripts/e2e-runtime.sh`: resolves `macp.v1.MACPRuntimeService` client-side
+  via `grpcurl -import-path`/`-proto` instead of gRPC server reflection, so it
+  now passes fully end to end against the real, default, published
+  `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image — no local
+  build or Cargo feature required. The `.proto` files are sourced from an
+  explicit `MACP_PROTO_DIR` override, a sibling `multiagentcoordinationprotocol`
+  checkout, or a pinned-tag fetch from that repo's public schema files; see
+  `ASSUMPTIONS.md`/`DECISIONS.md`. `docs/integration.md`'s ad-hoc-tooling
+  example updated to match (it had the same reflection-dependency gap).
 
 ## [1.0.0] — 2026-04-18
 

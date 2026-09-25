@@ -206,3 +206,53 @@ entry and `ASSUMPTIONS.md`'s updated status.
   documented as the remaining gap, not fixed here.
 - pushed fix/e2e-runtime-auth-probe 20f0d7b
 - PR #32 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/32
+
+## Progress — e2e-runtime-proto-resolution (2026-09-25)
+
+Repo map gathered while writing `plans/e2e-runtime-proto-resolution.md` — see that plan's own
+"Repo map" section for the full file/line inventory (`scripts/e2e-runtime.sh`'s existing structure,
+`../macp-runtime`'s Cargo/build.rs proto wiring, the schema repo's proto layout and public-repo
+status, the sibling Node repo's GitHub-Packages consumption pattern this plan deliberately avoids).
+Not duplicated here — `/implement` should read the plan file directly.
+
+**PR strategy:** one PR, single phase. The functional change (proto-based service resolution) and
+its doc updates (`README.md`, `docs/integration.md`, `CHANGELOG.md`, `ASSUMPTIONS.md`,
+`DECISIONS.md`) are one cohesive, small change with no independent-shippability seam worth
+splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that preceded it.
+
+**Branch:** `fix/e2e-runtime-proto-resolution`.
+
+### Phase 1 (only phase) — 2026-09-25
+
+- Verification gate: fresh Opus subagent (not the executor's context), given the plan's Phase 1
+  section, the staged diff, and the live test output. **PASS** on round 1 — all 9 acceptance
+  criteria independently re-run and confirmed by the verifier itself (not just trusted from the
+  implementer's transcript), all 6 of the plan's own review-round fixes confirmed actually landed
+  in the file content, `shellcheck` clean, quoting verified safe including space-containing paths.
+  One non-blocking finding: `MACP_PROTO_VERSION` was unsanitized before use in the fetch URL,
+  letting `curl`'s path normalization redirect the fetch to an arbitrary repo/ref. Closed
+  immediately (see `plans/e2e-runtime-proto-resolution.md`'s Phase 1 status note and
+  `DECISIONS.md`'s addendum) rather than deferred, since the fix was one line and had zero risk to
+  the passing paths — verified live both ways after the fix.
+- Regression: `npm run lint`, `npm run typecheck`, `npm test` (54/54) green, both before and after
+  the post-verification hardening fix.
+- Live e2e, all four resolution tiers run for real against the actual default published
+  `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image (no local build, no Cargo
+  feature): default/sibling-checkout path, `MACP_PROTO_SKIP_SIBLING=1` (network-fetch path, temp-dir
+  cleanup confirmed), `MACP_PROTO_DIR` override (complete dir), `MACP_PROTO_DIR` override (missing
+  file → fast named failure) — all as specified in acceptance criteria 2-4, 8-9.
+- Finalization (`/implement` §4): this is a one-phase feature, so the phase-1 gate above already
+  covers the whole diff; no additional integration seam exists between phases to test separately.
+  Docs (`README.md`, `docs/integration.md`, `CHANGELOG.md`) and tracked files
+  (`ASSUMPTIONS.md`, `DECISIONS.md`, this file, the plan itself) are all updated in this same
+  commit — no separate finalization commit needed.
+- Files touched: `scripts/e2e-runtime.sh`, `README.md`, `docs/integration.md`, `CHANGELOG.md`,
+  `ASSUMPTIONS.md`, `DECISIONS.md`, `plans/e2e-runtime-proto-resolution.md`, `PROGRESS.md`.
+- What's next: commit, then `/ship` (push, PR, CI watch, squash-merge).
+- `/ship` verification gate: fresh Opus subagent, full `git diff main...HEAD` — **PASS**, one cosmetic
+  nit (script header still said "v0.8.1 verifier" after README dropped that version-specific
+  wording in the same diff) — fixed and folded into the same unpushed commit via
+  `git commit --amend`. `MACP_PROTO_VERSION`'s input-validation guard was independently
+  fuzz-tested by the verifier (16 cases) and confirmed correct.
+- pushed fix/e2e-runtime-proto-resolution 0b66fb4
+- PR #33 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/33

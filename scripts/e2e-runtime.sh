@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # e2e-runtime.sh — end-to-end verification of the auth-service against a live
-# macp-runtime v0.8.1 verifier.
+# macp-runtime verifier.
 #
 # This is OPT-IN and is NOT wired into `npm test`. It requires Docker (and
 # grpcurl) and stands up a real runtime, so it is not appropriate for the
@@ -23,17 +23,15 @@
 # garbage, and could never actually prove 1-3 above. ListSessions checks auth
 # as its first statement, before request-shape validation.
 #
-# REFLECTION (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
-# call grpcurl without -proto/-protoset, which needs gRPC server reflection to
-# resolve the service by name. macp-runtime added opt-in reflection support on
-# `main`, after the v0.8.1 release (issues #186/#187, PR #188), behind a
-# non-default `reflection` Cargo feature — it is NOT built into the published
-# ghcr.io image (and is not yet in any tagged release), so this script
-# still fails at that step against the default MACP_RUNTIME_IMAGE. Confirmed
-# 2026-09-23 to pass fully end-to-end (RS256 accept, ES256 accept, garbage
-# reject) against a local image built with `--features reflection`. The
-# offline src/contract.spec.ts wire-shape test is unaffected either way and
-# remains the load-bearing verification for a default/CI-less run.
+# PROTO RESOLUTION (see ASSUMPTIONS.md / DECISIONS.md): expect_accept/expect_reject
+# resolve macp.v1.MACPRuntimeService client-side via grpcurl -import-path/-proto,
+# not gRPC server reflection — so this script needs nothing from the target
+# image beyond the plain RPC surface, and passes fully end-to-end (RS256 accept,
+# ES256 accept, garbage reject) against the real, default, published
+# MACP_RUNTIME_IMAGE with no local build required. See resolve_proto_dir()
+# below for where the .proto files come from. (macp-runtime separately gained
+# opt-in gRPC reflection support of its own — issues #186/#187, PR #188 — but
+# this script never needed it and doesn't depend on it either way.)
 #
 # Manual follow-up (NOT automated here — a timed 1 h grace window is not
 # proportionate to automate): stale-cache-grace probe.
@@ -52,10 +50,18 @@
 #   - node + this repo's deps installed (npm ci) to run the auth-service
 #
 # Config (override via env):
-#   MACP_RUNTIME_IMAGE   default: ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest
-#   MACP_RUNTIME_BIN     if set, run this local runtime binary instead of the image
-#   RUNTIME_GRPC_PORT    default: 50051
-#   AUTH_PORT            default: 3200
+#   MACP_RUNTIME_IMAGE     default: ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest
+#   MACP_RUNTIME_BIN       if set, run this local runtime binary instead of the image
+#   RUNTIME_GRPC_PORT      default: 50051
+#   AUTH_PORT              default: 3200
+#   MACP_PROTO_DIR         if set, use this dir (must contain macp/v1/{envelope,core,policy}.proto)
+#                          instead of resolving one; highest priority, fails fast if incomplete
+#   MACP_PROTO_VERSION     git tag in the multiagentcoordinationprotocol schema repo to fetch
+#                          the .proto files from when no sibling checkout/override is used;
+#                          default: proto-v0.1.10 (matches macp-runtime's current macp-proto pin,
+#                          Cargo.toml:65)
+#   MACP_PROTO_SKIP_SIBLING  set to 1 to force the network-fetch path even when a sibling
+#                          ../multiagentcoordinationprotocol checkout is present (test-only knob)
 #
 set -euo pipefail
 
@@ -79,13 +85,73 @@ need node
 need curl
 
 AUTH_PID=""
+PROTO_TMP_DIR=""
 cleanup() {
   set +e
   [ -n "${AUTH_PID}" ] && kill "${AUTH_PID}" 2>/dev/null
   docker rm -f "${RUNTIME_NAME}" >/dev/null 2>&1
   docker network rm "${NET_NAME}" >/dev/null 2>&1
+  [ -n "${PROTO_TMP_DIR}" ] && rm -rf "${PROTO_TMP_DIR}"
 }
 trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Resolve macp.v1's .proto files so grpcurl can describe
+# macp.v1.MACPRuntimeService client-side (see PROTO RESOLUTION above). Priority:
+# explicit MACP_PROTO_DIR override > sibling ../../multiagentcoordinationprotocol
+# checkout (this workspace's convention) > network fetch pinned to
+# MACP_PROTO_VERSION. Sets the global PROTO_DIR.
+#
+# core.proto is the only file grpcurl needs to be told about directly — it
+# imports envelope.proto and policy.proto (core.proto:5-6), and grpcurl
+# resolves those transitively from -import-path; neither of those two imports
+# anything further. This mirrors exactly the 3-file set macp-runtime's own
+# build.rs compiles for the same service.
+# ---------------------------------------------------------------------------
+proto_files_present() {
+  local dir="$1"
+  [ -f "${dir}/macp/v1/envelope.proto" ] && \
+  [ -f "${dir}/macp/v1/core.proto" ] && \
+  [ -f "${dir}/macp/v1/policy.proto" ]
+}
+
+PROTO_DIR=""
+resolve_proto_dir() {
+  if [ -n "${MACP_PROTO_DIR:-}" ]; then
+    proto_files_present "${MACP_PROTO_DIR}" \
+      || fail "MACP_PROTO_DIR=${MACP_PROTO_DIR} is missing one of macp/v1/{envelope,core,policy}.proto"
+    log "proto resolution: using MACP_PROTO_DIR override (${MACP_PROTO_DIR})"
+    PROTO_DIR="${MACP_PROTO_DIR}"
+    return 0
+  fi
+
+  local sibling
+  sibling="$(dirname "$0")/../../multiagentcoordinationprotocol/schemas/proto"
+  if [ "${MACP_PROTO_SKIP_SIBLING:-}" != "1" ] && proto_files_present "${sibling}"; then
+    log "proto resolution: using sibling checkout (${sibling})"
+    PROTO_DIR="${sibling}"
+    return 0
+  fi
+
+  local version="${MACP_PROTO_VERSION:-proto-v0.1.10}"
+  # Reject anything that could make curl's own path normalization retarget the
+  # fetch outside multiagentcoordinationprotocol/multiagentcoordinationprotocol
+  # (e.g. a `../../other-org/other-repo` value) before it ever reaches the URL.
+  case "${version}" in
+    *..*|/*|*[!A-Za-z0-9._/-]*)
+      fail "MACP_PROTO_VERSION=${version} is not a safe git ref (expected [A-Za-z0-9._/-]+, no '..' or leading '/')" ;;
+  esac
+  local base="https://raw.githubusercontent.com/multiagentcoordinationprotocol/multiagentcoordinationprotocol/${version}/schemas/proto/macp/v1"
+  log "proto resolution: no override/sibling checkout; fetching macp.v1 .proto files at ${version}"
+  PROTO_TMP_DIR="$(mktemp -d)"
+  mkdir -p "${PROTO_TMP_DIR}/macp/v1"
+  local f
+  for f in envelope.proto core.proto policy.proto; do
+    curl -fsS "${base}/${f}" -o "${PROTO_TMP_DIR}/macp/v1/${f}" \
+      || fail "failed to fetch ${f} from ${base} (network unreachable, or ${version} doesn't exist in multiagentcoordinationprotocol/multiagentcoordinationprotocol)"
+  done
+  PROTO_DIR="${PROTO_TMP_DIR}"
+}
 
 # ---------------------------------------------------------------------------
 # Start the auth-service on the host and expose it to the runtime container.
@@ -168,6 +234,7 @@ LIST_SESSIONS_BODY='{}'
 expect_accept() {
   local token="$1" label="$2"
   if grpcurl -plaintext \
+      -import-path "${PROTO_DIR}" -proto macp/v1/core.proto \
       -H "authorization: Bearer ${token}" -d "${LIST_SESSIONS_BODY}" \
       "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/ListSessions >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
     log "PASS: ${label} accepted"
@@ -181,6 +248,7 @@ expect_accept() {
 expect_reject() {
   local token="$1" label="$2"
   if grpcurl -plaintext \
+      -import-path "${PROTO_DIR}" -proto macp/v1/core.proto \
       -H "authorization: Bearer ${token}" -d "${LIST_SESSIONS_BODY}" \
       "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/ListSessions >/dev/null 2>/tmp/${RUNTIME_NAME}.err; then
     fail "${label}: expected UNAUTHENTICATED, but call succeeded"
@@ -198,6 +266,10 @@ if [ ! -f "$(dirname "$0")/../dist/index.js" ]; then
   log "building auth-service (npm run build)"
   ( cd "$(dirname "$0")/.." && npm run build >/dev/null )
 fi
+
+# Resolve macp.v1's .proto files once, before starting anything — no need to
+# re-resolve per runtime instance below.
+resolve_proto_dir
 
 # --- RS256 path ---
 start_auth RS256
