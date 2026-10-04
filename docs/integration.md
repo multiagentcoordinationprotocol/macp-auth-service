@@ -395,17 +395,7 @@ If the auth-service is configured with `MACP_AUTH_SIGNING_ALG=ES256`, construct 
 
 ## Scopes model
 
-The auth-service serializes scopes verbatim into the `macp_scopes` claim — it does **not** interpret them. Interpretation lives in the runtime. The canonical fields the runtime understands are:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `can_start_sessions` | boolean | May submit `SessionStart` envelopes. |
-| `can_manage_mode_registry` | boolean | May register/unregister/promote extension modes, and register/unregister policies (`RegisterPolicy`/`UnregisterPolicy`). |
-| `is_observer` | boolean | May passive-subscribe to sessions they are not a participant of. |
-| `allowed_modes` | string[] | Non-empty = restrict to these mode ids; empty or omitted = all modes. |
-| `max_open_sessions` | number | Upper bound on concurrent open sessions initiated by this sender. |
-
-Because the mint endpoint passes scopes through unmodified, any additional keys you add are surfaced to the runtime. The runtime ignores unknown scope fields for forward compatibility — you can safely extend the shape as long as the runtime's enforcement logic is updated in lockstep.
+The auth-service serializes scopes verbatim into the `macp_scopes` claim — it does **not** interpret them. The field table is in [API Reference › `POST /tokens` (scopes schema)](API.md#post-tokens); enforcement semantics are owned by the runtime (see its [API](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/API.md) and [Getting Started › JWT mode](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode)). Unknown scope keys pass through and are ignored by the runtime, so the shape can be extended as long as runtime enforcement is updated in lockstep.
 
 ## Common integration mistakes
 

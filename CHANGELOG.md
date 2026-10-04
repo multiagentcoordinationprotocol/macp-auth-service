@@ -22,14 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/` directory with long-form documentation: `README.md` (index),
   `getting-started.md`, `integration.md`, `architecture.md`, `API.md`,
   `deployment.md`, and `operations.md`. Style and structure match the
-  `runtime/docs` layout so the website can pick both up with the same sync.
+  `runtime/docs` layout so the website can pick both up.
   The integration and index pages call out both minter consumers
   (control-plane, SDK-based orchestrators) and bearer consumers
   (TS + Python SDK agents), with cross-links to the corresponding
   control-plane, SDK, and runtime auth docs.
-- `.github/workflows/notify-website.yml` — on push to `main` with changes
-  under `docs/**` or to `README.md`, dispatches a `docs-updated` event to
-  `multiagentcoordinationprotocol/website`.
 - Testable factory — `createApp(config, signing)` exported from `src/server.ts`
   so supertest can exercise the HTTP surface without opening a port.
 - Jest + supertest unit/integration tests covering `/healthz`,
@@ -46,6 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Docs de-duplicated: `README.md` is now a pointer page (API, config and key
+  generation are owned by `docs/API.md` and `docs/deployment.md`); scopes table
+  lives only in `docs/API.md`; the runtime-owned verifier behavior in
+  `docs/deployment.md` links to the runtime docs. Fixed stale `@types/node` row
+  in `docs/architecture.md`, the CI table (the `notify-website` workflow was
+  removed in #14; `auto-merge.yml` documented instead), and the README's
+  incomplete error list.
+- Re-verified against macp-runtime v0.8.8 (`crates/macp-auth` last changed in
+  v0.7.1, so no verifier-side drift; `scripts/e2e-runtime.sh` not re-run for
+  0.8.8), macp-sdk-typescript v0.14.1, macp-sdk-python v0.14.1 and
+  macp-control-plane v0.3.0.
 - Docs aligned to macp-runtime v0.5.0 auth changes (HS256 default removal,
   JWKS fetch hardening + stale-cache grace, dev-mode `MACP_ALLOW_INSECURE` gate,
   new `MACP_AUTH_JWT_ALGS` verifier allowlist). No production-code changes: this

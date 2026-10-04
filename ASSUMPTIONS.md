@@ -68,3 +68,11 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   default, published `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image, with no
   local build and no Cargo feature required. `docs/integration.md`'s Pattern 3 example had the
   identical reflection-dependency gap and was fixed alongside. Nothing outstanding.
+
+## Runtime 0.8.8 re-verification scope
+- **Plan:** docs-refresh-and-dedupe (PROGRESS.md)
+- **Assumed:** macp-runtime v0.8.8 is wire-compatible because `crates/macp-auth` last changed in v0.7.1 (git history).
+- **Chose:** recorded "re-verified" in CHANGELOG by source inspection only; `scripts/e2e-runtime.sh` was not re-run against 0.8.8.
+- **Alternatives:** run the e2e script (needs Docker + grpcurl).
+- **Blast radius if wrong:** a changelog claim; no code affected.
+- **Status:** UNCONFIRMED

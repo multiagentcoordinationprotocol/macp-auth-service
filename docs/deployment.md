@@ -59,7 +59,7 @@ Key rotation is a deploy-and-wait procedure. There is no in-process rotation; th
 5. Existing tokens signed by the old key remain valid until their own exp.
 ```
 
-Convergence bound (runtime ≥ 0.5.0): with a **healthy** JWKS endpoint, every verifier picks up the new key within one `MACP_AUTH_JWKS_TTL_SECS` window (step 4). If the JWKS endpoint is **unreachable** when a verifier tries to refresh, that verifier keeps serving its last-known key set for up to `TTL + 3600 s` (stale-cache grace) — so a rotated-out key can still verify that long. A runtime restart clears the in-memory cache and is the hard cutoff. This matters most for emergency rotation — see the [Operations Runbook](operations.md#key-rotation) for the step-by-step procedure including JWKS-reachability verification, the outage caveat, and rollback.
+Convergence bound: with a healthy JWKS endpoint every verifier picks up the new key within one `MACP_AUTH_JWKS_TTL_SECS` window. If a verifier cannot reach the endpoint it keeps serving stale keys for a longer, runtime-defined grace window, so a rotated-out key can verify past one TTL; a runtime restart is the hard cutoff. The grace details and the emergency-rotation checklist are canonical in [Operations › Key rotation](operations.md#key-rotation).
 
 ## Secret handling
 
@@ -176,16 +176,9 @@ export MACP_AUTH_ISSUER=auth.example.com                       # matches auth-se
 export MACP_AUTH_AUDIENCE=macp-runtime                         # matches auth-service
 export MACP_AUTH_JWKS_URL=https://auth.example.com/.well-known/jwks.json
 export MACP_AUTH_JWKS_TTL_SECS=300                             # cache refresh interval
-export MACP_AUTH_JWT_ALGS=RS256,ES256                          # runtime ≥ 0.5.0 default allowlist
 ```
 
-`MACP_AUTH_JWT_ALGS` is the runtime's signature-algorithm allowlist. Its default (`RS256,ES256`) already covers both algorithms this service can mint, so you normally leave it unset; HS256 is refused unless you add it here explicitly (and this service cannot mint HS256 regardless). The runtime fetches the JWKS on first use and caches it for `MACP_AUTH_JWKS_TTL_SECS`. Any token presented to the runtime is rejected unless:
-
-- The signature verifies against a key in the cached JWKS.
-- The header `alg` is in the runtime's `MACP_AUTH_JWT_ALGS` allowlist.
-- `iss` matches `MACP_AUTH_ISSUER`.
-- `aud` matches `MACP_AUTH_AUDIENCE`.
-- `exp` is in the future (within tolerable clock skew).
+The runtime owns verification semantics — the `MACP_AUTH_JWT_ALGS` allowlist (its default `RS256,ES256` already covers both algorithms this service mints, so leave it unset; this service cannot mint HS256), JWKS caching, and the signature / `iss` / `aud` / `exp` checks. See the runtime [Deployment › Authentication](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#authentication) guide rather than restating them here.
 
 For an air-gapped runtime that cannot reach this service over HTTP, the runtime also accepts the JWKS inline via `MACP_AUTH_JWKS_JSON` instead of `MACP_AUTH_JWKS_URL` — paste the exact body of `GET /.well-known/jwks.json`. This works precisely because our JWKS is stable when the signing key is pinned; you must re-push it on every key rotation, since there is no fetch to pick up the change.
 
@@ -238,7 +231,7 @@ Three GitHub Actions workflows ship with the repo.
 |----------|---------|---------|
 | `ci.yml` | PR + push to `main` | Lint, typecheck, test, build + smoke test, dependency review |
 | `docker.yml` | PR + push to `main` / tags | Build the container image, smoke-test it, publish to GHCR |
-| `notify-website.yml` | push to `main` with docs changes | Notify the docs website to sync |
+| `auto-merge.yml` | PR | Calls the shared `macp-ci` reusable auto-merge workflow |
 
 `ci.yml` runs lint and typecheck, then the test suite on a Node 20 + 22 matrix (Node 20 is the `engines` floor). Coverage floors are enforced by `coverageThreshold` in `jest.config.js`, so a coverage regression fails the build. The build job compiles the service, boots `dist/index.js`, and runs `scripts/smoke.js` against it — a black-box check that mints a token and verifies its signature against the served JWKS. PRs additionally get a dependency review that fails on newly introduced high-severity vulnerable dependencies.
 

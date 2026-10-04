@@ -256,3 +256,10 @@ splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that p
   fuzz-tested by the verifier (16 cases) and confirmed correct.
 - pushed fix/e2e-runtime-proto-resolution 0b66fb4
 - PR #33 opened: https://github.com/multiagentcoordinationprotocol/macp-auth-service/pull/33
+
+## docs-refresh-and-dedupe (2026-10-04)
+
+PR strategy: one PR (docs-only). Phases: (1) README -> pointer page; (2) fix stale/duplicated content in docs/, CLAUDE.md, CHANGELOG.md.
+Both Risk: simple, gated together by a fresh Opus verifier. Round 1: Phase 1 PASS, Phase 2 GAPS (lost RegisterPolicy clause, broken operations.md fence, residual runtime-owned restatements, 'Three validation branches'). Round 2: PASS.
+Files: README.md, CHANGELOG.md, CLAUDE.md, docs/{API,architecture,deployment,getting-started,integration,operations}.md.
+Canonical owners: API -> docs/API.md; env/keygen -> docs/deployment.md; stale-cache grace + rotation -> docs/operations.md; verifier semantics -> macp-runtime docs.

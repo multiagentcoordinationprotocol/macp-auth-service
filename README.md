@@ -2,7 +2,7 @@
 
 JWT-minting identity service for the MACP runtime. Implements RFC-MACP-0004 §4
 (direct-agent-auth) as a dedicated identity provider so that SDK-based agents
-can authenticate directly to the runtime with short-lived RS256 bearer tokens.
+can authenticate directly to the runtime with short-lived RS256 (or ES256) bearer tokens.
 
 ## Role in the stack
 
@@ -20,7 +20,7 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
   the [playground](https://github.com/multiagentcoordinationprotocol/macp-playground) (which mints per agent spawn, see its
   [AUTH-2 guide](https://github.com/multiagentcoordinationprotocol/macp-playground/blob/main/docs/direct-agent-auth.md#auth-2--on-demand-jwt-minting)),
   or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript)
-  or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python))
+  or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python)
   calls `POST /tokens` once per agent it spawns, passing `sender` + scopes.
   The returned JWT is handed to the agent in its bootstrap payload under
   `runtime.bearerToken`.
@@ -31,9 +31,7 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
   [Python](https://github.com/multiagentcoordinationprotocol/macp-sdk-python/blob/main/docs/guides/direct-agent-auth.md)).
 - **Verification:** the runtime is configured with
   `MACP_AUTH_JWKS_URL=http://auth-service:3200/.well-known/jwks.json`. It
-  fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
-  incoming JWT's signature + header `alg` (against `MACP_AUTH_JWT_ALGS`,
-  default `RS256,ES256` on runtime ≥ 0.5.0) + `iss` + `aud` + `exp` on each
+  fetches and caches the JWKS and validates every incoming JWT on each
   gRPC frame (claims contract: [RFC-MACP-0004 §4](https://github.com/multiagentcoordinationprotocol/multiagentcoordinationprotocol/blob/main/rfcs/RFC-MACP-0004-security.md)). See the runtime
   [Getting Started](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode)
   and
@@ -45,111 +43,35 @@ once per agent at provisioning time, then reused for the session lifetime.
 
 ## API
 
-### `GET /healthz`
-
-Liveness probe. Returns `{ "ok": true }` with HTTP 200.
-
-### `GET /.well-known/jwks.json`
-
-Returns the public JWKS (private material is never exposed here).
-
-```json
-{
-  "keys": [{
-    "kty": "RSA", "alg": "RS256", "use": "sig", "kid": "dev-key-1",
-    "n": "…", "e": "AQAB"
-  }]
-}
-```
-
-### `POST /tokens`
-
-Mint a JWT.
-
-Request:
-
-```json
-{
-  "sender": "risk-agent",
-  "scopes": {
-    "can_start_sessions": true,
-    "is_observer": false,
-    "allowed_modes": ["macp.mode.decision.v1", ""],
-    "max_open_sessions": 1,
-    "can_manage_mode_registry": false
-  },
-  "ttl_seconds": 3600
-}
-```
-
-- `sender` (required) — becomes the JWT `sub` claim and the authenticated
-  identity the runtime associates with incoming frames.
-- `scopes` (optional) — serialized verbatim under the `macp_scopes` claim.
-- `ttl_seconds` (optional) — clamped by `MACP_AUTH_MAX_TTL_SECONDS`. Defaults
-  to `MACP_AUTH_DEFAULT_TTL_SECONDS` when omitted.
-
-Response:
-
-```json
-{
-  "token": "eyJhbGciOi…",
-  "sender": "risk-agent",
-  "expires_in_seconds": 3600
-}
-```
-
-Errors:
-- `400` `{"error":"sender is required"}` if `sender` is missing or empty.
-- `400` `{"error":"ttl_seconds must be a positive number"}` if `ttl_seconds` is
-  non-positive or non-finite.
+Three endpoints — `GET /healthz`, `GET /.well-known/jwks.json`, and
+`POST /tokens` (mint a JWT from `sender` + `scopes` + `ttl_seconds`). Request and
+response fields, the scopes schema, JWT claims, and the error table live in the
+[API Reference](docs/API.md); that page is the single source of truth.
 
 ## Configuration
 
-See `.env.example` for the complete reference. Minimum in production:
-
-| Variable | Default | Required? | Notes |
-|---|---|---|---|
-| `PORT` | `3200` | no | HTTP listen port |
-| `MACP_AUTH_ISSUER` | `macp-auth-service` | no | JWT `iss`. Must match runtime's expected issuer. |
-| `MACP_AUTH_AUDIENCE` | `macp-runtime` | no | JWT `aud`. Must match runtime's expected audience. |
-| `MACP_AUTH_MAX_TTL_SECONDS` | `3600` | no | Upper bound on minted token lifetime. |
-| `MACP_AUTH_DEFAULT_TTL_SECONDS` | `300` | no | Applied when request omits `ttl_seconds`. |
-| `MACP_AUTH_SIGNING_ALG` | `RS256` | no | Signature algorithm. `RS256` (RSA) or `ES256` (EC P-256). The runtime accepts both; the JWKS advertises whichever is configured. |
-| `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | Private JWK matching `MACP_AUTH_SIGNING_ALG` (RSA for `RS256`, EC P-256 for `ES256`). If unset, generates an ephemeral keypair on startup (dev only — keys rotate on every restart). |
-
-### Generating a production signing key
-
-```bash
-node -e "const {generateKeyPair, exportJWK} = require('jose'); \
-  (async () => { \
-    const { privateKey } = await generateKeyPair('RS256', { extractable: true }); \
-    const jwk = await exportJWK(privateKey); \
-    jwk.kid = 'prod-key-1'; \
-    console.log(JSON.stringify(jwk)); \
-  })();"
-```
-
-Set the output as `MACP_AUTH_SIGNING_KEY_JSON`. Rotate by generating a new
-key with a fresh `kid` and redeploying; the runtime's JWKS cache refreshes
-within `MACP_AUTH_JWKS_TTL_SECS` while the JWKS endpoint stays reachable. On
-runtime ≥ 0.5.0 a verifier that can't refresh keeps the old key set for up to
-`TTL + 3600 s` (stale-cache grace) — see the
-[Operations Runbook](docs/operations.md#key-rotation) for emergency rotation.
-
-For an EC P-256 key (`MACP_AUTH_SIGNING_ALG=ES256`), substitute `'ES256'` for
-`'RS256'` in the snippet above — `generateKeyPair`/`exportJWK` emit the
-matching `kty: "EC"` JWK, and the service advertises it on the JWKS unchanged.
+Configuration is environment-driven (`PORT`, `MACP_AUTH_ISSUER`,
+`MACP_AUTH_AUDIENCE`, `MACP_AUTH_MAX_TTL_SECONDS`, `MACP_AUTH_DEFAULT_TTL_SECONDS`,
+`MACP_AUTH_SIGNING_ALG`, `MACP_AUTH_SIGNING_KEY_JSON`). The variable reference is in
+[Deployment › Environment variables](docs/deployment.md#environment-variables), and
+[`.env.example`](.env.example) is a copy-paste starting point.
+`MACP_AUTH_SIGNING_KEY_JSON` is **required in production** — without it the service
+generates an ephemeral keypair that changes on every restart. Key generation and
+rotation: [Deployment › Signing key generation](docs/deployment.md#signing-key-generation)
+and [Operations › Key rotation](docs/operations.md#key-rotation).
 
 ## Development
 
 ```bash
 npm install          # one-time
-npm run dev          # ts-node watch (not restart)
+npm run dev          # ts-node (no auto-reload)
 npm test             # jest — unit + HTTP integration via supertest
 npm run test:coverage
 npm run build        # compile to dist/
 npm start            # run the compiled build
 npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
+node scripts/smoke.js http://localhost:3200   # black-box check of a running instance
 ```
 
 ### End-to-end against a live runtime (opt-in)
@@ -160,13 +82,10 @@ real macp-runtime container (requires Docker + `grpcurl`; not wired into
 See the script header for the manual stale-cache-grace probe.
 
 The script resolves `macp.v1.MACPRuntimeService` client-side from the versioned
-`.proto` schema (`grpcurl -import-path`/`-proto`), not via gRPC server
-reflection, so it passes fully end to end against the real, default,
-published `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image —
-no local build or Cargo feature required. See `ASSUMPTIONS.md`/`DECISIONS.md`
-for how the `.proto` files are sourced and the history of this fix; the
-offline `src/contract.spec.ts` wire-shape test remains the load-bearing check
-for the runtime contract in CI, where this opt-in script doesn't run.
+`.proto` schema rather than gRPC reflection, so it works against the default published
+`ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image. Rationale and
+`.proto` sourcing: `ASSUMPTIONS.md` / `DECISIONS.md` and the script header. In CI, the offline `src/contract.spec.ts`
+wire-shape test is the load-bearing contract check.
 
 ## Docker
 
@@ -194,12 +113,8 @@ Full documentation lives under [`docs/`](docs/README.md):
 
 ## Security notes
 
-- **`POST /tokens` has no client authentication in this implementation.** It
-  assumes a trusted intra-cluster network. If the service is reachable from
-  anywhere else, put it behind mTLS / a reverse proxy that authenticates
-  callers, or add a shared-secret `Authorization` header check. Anyone who
-  can hit `/tokens` today can mint a JWT for any `sender`.
-- Run with `MACP_AUTH_SIGNING_KEY_JSON` supplied by a secret store
-  (Kubernetes Secret, Vault, etc.) in any shared environment.
-- Container runs as a non-root user and exposes an HTTP healthcheck; no
-  extra runtime privileges are needed.
+**`POST /tokens` has no client authentication** — anyone who can reach it can mint a
+token for any `sender`. Keep it on a trusted network or front it with mTLS / an
+authenticating proxy; see [`SECURITY.md`](SECURITY.md) and the
+[Production checklist](docs/deployment.md#production-checklist). Supply
+`MACP_AUTH_SIGNING_KEY_JSON` from a secret store in any shared environment.
