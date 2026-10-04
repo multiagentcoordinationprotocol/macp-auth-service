@@ -16,8 +16,10 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
   SDK agents (TS / Python) ──Authorization: Bearer <JWT>──► macp-runtime (gRPC)
 ```
 
-- **Minting:** the [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane)
-  (or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript)
+- **Minting:** the [control-plane](https://github.com/multiagentcoordinationprotocol/macp-control-plane),
+  the [playground](https://github.com/multiagentcoordinationprotocol/macp-playground) (which mints per agent spawn, see its
+  [AUTH-2 guide](https://github.com/multiagentcoordinationprotocol/macp-playground/blob/main/docs/direct-agent-auth.md#auth-2--on-demand-jwt-minting)),
+  or any orchestrator built on the [TypeScript SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-typescript)
   or [Python SDK](https://github.com/multiagentcoordinationprotocol/macp-sdk-python))
   calls `POST /tokens` once per agent it spawns, passing `sender` + scopes.
   The returned JWT is handed to the agent in its bootstrap payload under
@@ -32,7 +34,7 @@ can authenticate directly to the runtime with short-lived RS256 bearer tokens.
   fetches the JWKS (cached per `MACP_AUTH_JWKS_TTL_SECS`) and validates every
   incoming JWT's signature + header `alg` (against `MACP_AUTH_JWT_ALGS`,
   default `RS256,ES256` on runtime ≥ 0.5.0) + `iss` + `aud` + `exp` on each
-  gRPC frame. See the runtime
+  gRPC frame (claims contract: [RFC-MACP-0004 §4](https://github.com/multiagentcoordinationprotocol/multiagentcoordinationprotocol/blob/main/rfcs/RFC-MACP-0004-security.md)). See the runtime
   [Getting Started](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/getting-started.md#jwt-mode)
   and
   [Deployment](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#authentication)

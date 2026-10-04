@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `createLocalJWKSet`) are available in v5.
 - Pinned `typescript` to `^5.6.3` and `@types/node` to `^20.x` to align with
   the rest of the monorepo toolchain.
+- Docs: added the macp-playground as a second minter (links to its AUTH-2 guide), linked RFC-MACP-0004 §4 to the spec repo, and replaced restated runtime-owned behavior (`MACP_AUTH_JWT_ALGS`, dev-mode gate) with links to the runtime docs.
 - Re-verified against macp-runtime v0.8.6 (`crates/macp-auth` unchanged since
   v0.8.1; `scripts/e2e-runtime.sh` passes for RS256 and ES256 against the
   published 0.8.6 image), macp-sdk-typescript v0.13.0 and macp-sdk-python

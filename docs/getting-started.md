@@ -218,7 +218,7 @@ cargo run --manifest-path ../macp-runtime/Cargo.toml
 
 Now run any gRPC client with the minted JWT as a bearer token. The runtime will fetch your JWKS on the first request and cache it for 60 seconds.
 
-> **Runtime ≥ 0.5.0 dev-mode gate:** if you start the runtime with *neither* a JWT issuer nor a static `MACP_AUTH_TOKENS_FILE`, it now refuses to start unless `MACP_ALLOW_INSECURE=1` — and the published runtime Docker image no longer bakes that flag in, so a bare `docker run` of the runtime fails fast. Pass auth config (as above) or the flag explicitly.
+> **Dev-mode gate:** a runtime with neither a JWT issuer nor static tokens configured refuses to start without `MACP_ALLOW_INSECURE=1`. That behavior is owned by the runtime — see its [Container deployment](https://github.com/multiagentcoordinationprotocol/macp-runtime/blob/main/docs/deployment.md#container-deployment) docs.
 
 ## Common errors
 
