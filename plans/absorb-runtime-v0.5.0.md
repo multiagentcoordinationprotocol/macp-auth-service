@@ -1,6 +1,6 @@
 # Plan: absorb macp-runtime v0.5.0 (+ macp-proto 0.1.3→0.1.6, spec updates)
 
-Status: proposed (not started)
+Status: DONE — fully executed (T1–T7); superseded by `plans/absorb-runtime-v0.8.1.md`. Retained as a historical record.
 Owner: auth-service maintainers
 Scope: this repo only (`auth-service`). No code changes to the runtime are proposed here.
 Ground truth verified against: `../macp-runtime` @ branch `feat/improvement-plan-phases-a-e`

@@ -1,5 +1,7 @@
 # Stop depending on gRPC reflection in scripts/e2e-runtime.sh
 
+Status: DONE (2026-09-25) — single phase implemented and verified; no open questions.
+
 ## Context
 
 `scripts/e2e-runtime.sh` verifies the auth-service's minted JWTs against a real
