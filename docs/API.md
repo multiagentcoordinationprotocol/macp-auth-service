@@ -68,7 +68,7 @@ Returns the public JWKS document that verifiers (typically the MACP runtime) fet
 | `alg` | string | Signature algorithm: `RS256` by default, or `ES256` when `MACP_AUTH_SIGNING_ALG=ES256`. Matches the minted tokens' header. |
 | `use` | string | Key usage. Always `sig`. |
 
-The example above shows the default RSA key; with `MACP_AUTH_SIGNING_ALG=ES256` the entry is an EC P-256 key (`"kty":"EC","crv":"P-256","x":…,"y":…`). The service publishes exactly one key at any given time. Rotating keys means replacing the JWK, redeploying, and waiting `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh — provided the JWKS endpoint stays reachable; on runtime >= 0.5.0 a verifier that can't refresh serves the old key set for up to `TTL + 3600 s` (stale-cache grace). See [Operations — Key rotation](operations.md#key-rotation).
+The example above shows the default RSA key; with `MACP_AUTH_SIGNING_ALG=ES256` the entry is an EC P-256 key (`"kty":"EC","crv":"P-256","x":…,"y":…`). The service publishes exactly one key at any given time. Rotating keys means replacing the JWK, redeploying, and waiting `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh — provided the JWKS endpoint stays reachable; a verifier that can't refresh keeps serving stale keys for a bounded grace window. See [Operations — Key rotation](operations.md#key-rotation).
 
 **Example**
 
@@ -111,7 +111,7 @@ Mints a signed JWT (RS256 by default, or ES256 when `MACP_AUTH_SIGNING_ALG=ES256
 | Field | Type | Runtime meaning |
 |-------|------|-----------------|
 | `can_start_sessions` | boolean | May submit `SessionStart` envelopes. |
-| `can_manage_mode_registry` | boolean | May register / unregister / promote extension modes. |
+| `can_manage_mode_registry` | boolean | May register / unregister / promote extension modes, and register / unregister policies (`RegisterPolicy` / `UnregisterPolicy`). |
 | `is_observer` | boolean | May passive-subscribe to sessions the caller is not a declared participant of. |
 | `allowed_modes` | string[] | If non-empty, restricts the set of modes the sender may use. Empty or omitted = all modes allowed. |
 | `max_open_sessions` | number | Upper bound on concurrent open sessions the sender can initiate. |
@@ -182,7 +182,7 @@ The following are raised by `jose.jwtVerify` (or an equivalent verifier) at the 
 
 | Error name | Cause | Resolution |
 |------------|-------|------------|
-| `JWSSignatureVerificationFailed` | Key rotation not yet reflected in verifier's JWKS cache, or token signed by a different key entirely. | Wait `MACP_AUTH_JWKS_TTL_SECS`, or restart the verifier; confirm `kid` in token matches a JWKS entry. On runtime >= 0.5.0, if the verifier can't reach the JWKS endpoint it stays on stale cached keys for up to `TTL + 3600 s` — fix reachability or restart the verifier. |
+| `JWSSignatureVerificationFailed` | Key rotation not yet reflected in verifier's JWKS cache, or token signed by a different key entirely. | Wait `MACP_AUTH_JWKS_TTL_SECS`, or restart the verifier; confirm `kid` in token matches a JWKS entry. If the verifier can't reach the JWKS endpoint it stays on stale cached keys for a bounded grace window — fix reachability or restart the verifier (see [Operations — Key rotation](operations.md#key-rotation)). |
 | `JWTClaimValidationFailed: iss` | Issuer mismatch between minter and verifier. | Align `MACP_AUTH_ISSUER`. |
 | `JWTClaimValidationFailed: aud` | Audience mismatch. | Align `MACP_AUTH_AUDIENCE`. |
 | `JWTExpired` | Token `exp` has passed, or large clock skew between minter and verifier. | Mint a fresh token; verify NTP sync. |

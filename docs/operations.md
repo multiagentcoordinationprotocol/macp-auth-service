@@ -57,13 +57,9 @@ Rotation is the primary remediation for a suspected key compromise and a routine
 ### Routine rotation
 
 ```
-Step 1. Generate a new JWK (use 'ES256' in both places if MACP_AUTH_SIGNING_ALG=ES256).
-  node -e "const {generateKeyPair,exportJWK}=require('jose');
-    (async()=>{const {privateKey}=await generateKeyPair('RS256',{extractable:true});
-    const jwk=await exportJWK(privateKey);
-    jwk.kid='prod-key-' + new Date().toISOString().slice(0,10);
-    jwk.alg='RS256'; jwk.use='sig';
-    console.log(JSON.stringify(jwk))})()"
+Step 1. Generate a new JWK with a new kid, using the snippet in
+  Deployment > Signing key generation (deployment.md#signing-key-generation);
+  swap both 'RS256' literals for 'ES256' if MACP_AUTH_SIGNING_ALG=ES256.
 
 Step 2. Store the new JWK in the secret manager.
   - Do not delete the previous key yet.

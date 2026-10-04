@@ -56,11 +56,7 @@ The `key source: ephemeral` line is the signal that you did not provide `MACP_AU
 In production the service requires a pinned signing key so it survives restarts and so the runtime's JWKS cache stays warm. Generate one once, store it in your secret manager, and inject it at process start.
 
 ```bash
-# Generate a production JWK (swap 'RS256' for 'ES256' to mint with an EC P-256 key)
-node -e "const {generateKeyPair,exportJWK}=require('jose'); \
-  (async()=>{const {privateKey}=await generateKeyPair('RS256',{extractable:true}); \
-  const jwk=await exportJWK(privateKey); jwk.kid='prod-key-1'; \
-  console.log(JSON.stringify(jwk))})()"
+# Generate a production JWK first — see Deployment › Signing key generation
 
 # Run with the pinned key (MACP_AUTH_SIGNING_ALG must match the key type; defaults to RS256)
 export MACP_AUTH_SIGNING_KEY_JSON='{"kty":"RSA","kid":"prod-key-1",...}'

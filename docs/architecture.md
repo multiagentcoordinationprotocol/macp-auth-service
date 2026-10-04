@@ -76,7 +76,7 @@ request
   → { token, sender, expires_in_seconds } response
 ```
 
-The scopes check exists because the runtime deserializes `macp_scopes` into a struct — a non-object would mint a token the runtime rejects, so the mint boundary fails fast instead. Three validation branches fail fast with `400` before any signing work happens. Once validation passes, `jose.SignJWT` builds the JWS compact serialization entirely in memory. The private key is held as a Node `KeyObject` (via `jose.importJWK` or `jose.generateKeyPair`); it is never exposed outside this module and is never logged.
+The scopes check exists because the runtime deserializes `macp_scopes` into a struct — a non-object would mint a token the runtime rejects, so the mint boundary fails fast instead. Each validation branch fails fast with `400` before any signing work happens. Once validation passes, `jose.SignJWT` builds the JWS compact serialization entirely in memory. The private key is held as a Node `KeyObject` (via `jose.importJWK` or `jose.generateKeyPair`); it is never exposed outside this module and is never logged.
 
 Clock skew handling is deliberately simple: `iat` is set to the process's current time and `exp` is `iat + ttl`. The verifier is responsible for tolerating skew via `clockTolerance` — the runtime defaults to a small window.
 
@@ -117,7 +117,7 @@ There is no in-process rotation. The service advertises exactly one key at any g
 4. Wait `MACP_AUTH_JWKS_TTL_SECS` for verifiers to refresh their JWKS caches.
 5. In-flight tokens signed by the previous key stop verifying at the end of their own TTL.
 
-Step 4's one-TTL bound assumes a **healthy** JWKS endpoint. On runtime >= 0.5.0, a verifier whose refresh fails serves its last-known keys under a stale-cache grace for up to `TTL + 3600 s`, so a rotated-out key can verify that long on an isolated verifier; a runtime restart is the hard cutoff. See [Operations — Key rotation](operations.md#key-rotation) for the operational procedure and the emergency-rotation checklist that closes this gap.
+Step 4's one-TTL bound assumes a **healthy** JWKS endpoint; a verifier that cannot refresh serves stale keys for a longer grace window (a runtime restart is the hard cutoff). See [Operations — Key rotation](operations.md#key-rotation) for the bound and the emergency-rotation checklist.
 
 ## Concurrency model
 
@@ -155,7 +155,7 @@ The service does not emit metrics. If you need Prometheus counters (mint count, 
 | `express` | `^5.2.1` | Standard Node HTTP framework. Async-first in v5, no need for `express-async-errors`. |
 | `jose` | `^5.9.6` | Spec-compliant JOSE (JWS, JWE, JWK, JWKS) with full TypeScript types. **Pinned to v5** for CommonJS compatibility with ts-jest. v6+ is ESM-only. |
 | `typescript` | `^5.6.3` | Matches the rest of the MACP monorepo. `strict` mode plus `noUnusedLocals` / `noUnusedParameters` / `noImplicitOverride`. |
-| `@types/node` | `^20.x` | Matches `engines.node >= 20`. |
+| `@types/node` | `^26.x` (Dependabot-managed) | Intentionally ahead of the `engines.node >= 20` floor, so `tsc` may accept `node:` APIs absent on Node 20 — verify any recent builtin by hand (see `CLAUDE.md` › Dependency constraints). |
 | `jest` + `ts-jest` + `supertest` | current stable | HTTP integration tests against the real Express surface with real RSA keys. |
 
 `jose` is the only non-framework dependency. No custom crypto, no `jsonwebtoken`, no `node-jose`. This narrows the trusted-code surface for a service whose entire job is signing tokens.
