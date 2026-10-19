@@ -171,3 +171,17 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
   `/`, or a character outside `[A-Za-z0-9._/-]`. Verified live: the legitimate default still passes
   fully via the network-fetch tier; a traversal payload is now rejected immediately with a named
   error. `shellcheck` clean throughout.
+
+## 2026-10-19 — e2e default runtime image: `:latest` → `:0.9`
+
+- **Context:** the 2026-09-25 decision left `scripts/e2e-runtime.sh` defaulting to
+  `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest`. The runtime documents that
+  `:latest` tracks `main`, not the newest release (runtime `docs/deployment.md`, "Published image
+  tags"), while `MACP_PROTO_VERSION` names a released tag. The default probe could therefore test
+  unreleased runtime code against a released proto.
+- **Chosen:** default to `:0.9` (the 0.9.x release line, matching `proto-v0.1.11`). Runs are
+  reproducible; the default needs a bump at each runtime minor release, alongside the proto pin.
+- **Rejected:** keeping `:latest` (unreproducible, proto/image skew possible).
+- **Decided by:** the repo owner (asked directly, 2026-10-19), during the macp-runtime 0.9.0
+  alignment (`plans/macp-runtime-0.9.0-alignment.md`, open question 1). Reverses the image choice
+  in the 2026-09-25 entry; everything else in that entry stands.
