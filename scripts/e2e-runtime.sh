@@ -8,13 +8,17 @@
 # repo's current CI, which has no runtime-image contract. Run it by hand when
 # validating that the wiring snippets in docs/ are true against the real binary.
 #
-# What it proves (all against runtime >= 0.5.0):
+# What it proves (1-3 against runtime >= 0.5.0; 4 needs runtime >= 0.9.0):
 #   1. An RS256 token minted here is accepted by the runtime (RS256 in the
 #      default MACP_AUTH_JWT_ALGS allowlist, JWKS fetch works, kid fast path,
 #      iss/aud match, dev-gate satisfied by JWT config alone).
 #   2. The same holds for ES256 (MACP_AUTH_SIGNING_ALG=ES256).
 #   3. A garbage bearer is rejected with UNAUTHENTICATED — proving no dev-mode
 #      "accept any token" fallback leaked in (the v0.5.0 gate change).
+#   4. An ambient Signal sent with an RS256 token minted here reaches a
+#      WatchSignals subscriber with sender_authenticated = true (runtime 0.9.0,
+#      macp-proto 0.1.11): the runtime treats our tokens as verified
+#      credentials, not dev-mode self-assertion.
 #
 # expect_accept/expect_reject probe with ListSessions, not Initialize:
 # Initialize never calls authenticate_metadata (confirmed by source read +
@@ -50,7 +54,9 @@
 #   - node + this repo's deps installed (npm ci) to run the auth-service
 #
 # Config (override via env):
-#   MACP_RUNTIME_IMAGE     default: ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest
+#   MACP_RUNTIME_IMAGE     default: ghcr.io/multiagentcoordinationprotocol/macp-runtime:0.9
+#                          (the 0.9.x release line, matching MACP_PROTO_VERSION below; :latest
+#                          tracks runtime main, not the newest release — see DECISIONS.md)
 #   MACP_RUNTIME_BIN       if set, run this local runtime binary instead of the image
 #   RUNTIME_GRPC_PORT      default: 50051
 #   AUTH_PORT              default: 3200
@@ -58,14 +64,14 @@
 #                          instead of resolving one; highest priority, fails fast if incomplete
 #   MACP_PROTO_VERSION     git tag in the multiagentcoordinationprotocol schema repo to fetch
 #                          the .proto files from when no sibling checkout/override is used;
-#                          default: proto-v0.1.10 (matches macp-runtime's current macp-proto pin,
-#                          Cargo.toml:65)
+#                          default: proto-v0.1.11 (matches macp-runtime's macp-proto pin,
+#                          Cargo.toml:65 as of 0.9.0)
 #   MACP_PROTO_SKIP_SIBLING  set to 1 to force the network-fetch path even when a sibling
 #                          ../multiagentcoordinationprotocol checkout is present (test-only knob)
 #
 set -euo pipefail
 
-MACP_RUNTIME_IMAGE="${MACP_RUNTIME_IMAGE:-ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest}"
+MACP_RUNTIME_IMAGE="${MACP_RUNTIME_IMAGE:-ghcr.io/multiagentcoordinationprotocol/macp-runtime:0.9}"
 RUNTIME_GRPC_PORT="${RUNTIME_GRPC_PORT:-50051}"
 AUTH_PORT="${AUTH_PORT:-3200}"
 NET_NAME="macp-e2e-$$"
@@ -85,9 +91,11 @@ need node
 need curl
 
 AUTH_PID=""
+WATCH_PID=""
 PROTO_TMP_DIR=""
 cleanup() {
   set +e
+  [ -n "${WATCH_PID}" ] && kill "${WATCH_PID}" 2>/dev/null
   [ -n "${AUTH_PID}" ] && kill "${AUTH_PID}" 2>/dev/null
   docker rm -f "${RUNTIME_NAME}" >/dev/null 2>&1
   docker network rm "${NET_NAME}" >/dev/null 2>&1
@@ -133,7 +141,7 @@ resolve_proto_dir() {
     return 0
   fi
 
-  local version="${MACP_PROTO_VERSION:-proto-v0.1.10}"
+  local version="${MACP_PROTO_VERSION:-proto-v0.1.11}"
   # Reject anything that could make curl's own path normalization retarget the
   # fetch outside multiagentcoordinationprotocol/multiagentcoordinationprotocol
   # (e.g. a `../../other-org/other-repo` value) before it ever reaches the URL.
@@ -226,7 +234,7 @@ mint() {
 # so it accepts *any* bearer, valid or garbage, as long as
 # supported_protocol_versions is populated. ListSessions checks auth as its
 # first statement, deliberately before request-shape validation
-# (src/server.rs:1274-1278), and takes an all-optional request ({} is valid:
+# (src/server.rs:1445-1450 as of runtime 0.9.0), and takes an all-optional request ({} is valid:
 # page_size=0 means server-chosen default, page_token="" means first page).
 LIST_SESSIONS_BODY='{}'
 
@@ -261,6 +269,63 @@ expect_reject() {
   fi
 }
 
+# Expect an ambient Signal sent with the given bearer to reach a WatchSignals
+# subscriber with sender_authenticated = true. The runtime sets the flag from
+# SecurityLayer::authenticates_senders() (true for JWT and static bearer, false
+# in dev mode). It is a proto3 bool, so it is never "absent" on the wire: the
+# watcher runs with -emit-defaults and we assert the value is true, not merely
+# that the field shows up. A pre-0.9 runtime never sets it, so it reads false.
+expect_signal_authenticated() {
+  local token="$1" label="$2"
+  local out="/tmp/${RUNTIME_NAME}.watch" message_id payload
+  message_id="$(node -e 'process.stdout.write(require("crypto").randomUUID())')"
+  # SignalPayload{signal_type: "progress"} encoded by hand: field 1, wire type 2.
+  payload="$(node -e 'process.stdout.write(Buffer.concat([Buffer.from([0x0a,8]),Buffer.from("progress")]).toString("base64"))')"
+
+  : >"${out}"
+  grpcurl -plaintext -emit-defaults -max-time 15 \
+    -import-path "${PROTO_DIR}" -proto macp/v1/core.proto \
+    -H "authorization: Bearer ${token}" -d '{}' \
+    "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/WatchSignals >"${out}" 2>&1 &
+  WATCH_PID=$!
+  # Give the subscription time to register before the Signal is broadcast;
+  # Signals are not replayed to late subscribers.
+  sleep 1
+
+  if ! grpcurl -plaintext \
+      -import-path "${PROTO_DIR}" -proto macp/v1/core.proto \
+      -H "authorization: Bearer ${token}" \
+      -d "{\"envelope\":{\"macp_version\":\"1.0\",\"message_type\":\"Signal\",\"message_id\":\"${message_id}\",\"payload\":\"${payload}\"}}" \
+      "127.0.0.1:${RUNTIME_GRPC_PORT}" macp.v1.MACPRuntimeService/Send >/tmp/${RUNTIME_NAME}.send 2>&1; then
+    cat /tmp/${RUNTIME_NAME}.send >&2 || true
+    fail "${label}: Send of an ambient Signal failed"
+  fi
+  if ! grep -q '"ok": true' /tmp/${RUNTIME_NAME}.send; then
+    cat /tmp/${RUNTIME_NAME}.send >&2 || true
+    fail "${label}: Send of an ambient Signal was not acked ok"
+  fi
+
+  local delivered=""
+  for _ in $(seq 1 50); do
+    if grep -q "${message_id}" "${out}"; then delivered=1; break; fi
+    sleep 0.1
+  done
+  kill "${WATCH_PID}" 2>/dev/null || true
+  wait "${WATCH_PID}" 2>/dev/null || true
+  WATCH_PID=""
+
+  if [ -z "${delivered}" ]; then
+    cat "${out}" >&2 || true
+    fail "${label}: Signal ${message_id} was not delivered to the WatchSignals subscriber"
+  fi
+  if grep -q '"senderAuthenticated": true' "${out}"; then
+    log "PASS: Signal delivered with sender_authenticated=true (${label})"
+  else
+    cat "${out}" >&2 || true
+    fail "${label}: Signal delivered with sender_authenticated != true. This check needs macp-runtime >= 0.9.0 (macp-proto 0.1.11); an older runtime never sets the flag, so this is expected there and is not an auth regression. On >= 0.9.0 it means the runtime did not treat the token as a verified credential."
+  fi
+}
+
 # Build the compiled service once so `node dist/index.js` is available.
 if [ ! -f "$(dirname "$0")/../dist/index.js" ]; then
   log "building auth-service (npm run build)"
@@ -276,6 +341,7 @@ start_auth RS256
 start_runtime
 RS_TOKEN="$(mint)"
 expect_accept "${RS_TOKEN}" "RS256 token"
+expect_signal_authenticated "${RS_TOKEN}" "RS256 token"
 expect_reject "not-a-real.jwt.token" "garbage bearer"
 docker rm -f "${RUNTIME_NAME}" >/dev/null 2>&1 || true
 stop_auth

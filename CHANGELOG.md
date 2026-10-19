@@ -50,6 +50,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `docs/architecture.md`, the CI table (the `notify-website` workflow was
   removed in #14; `auto-merge.yml` documented instead), and the README's
   incomplete error list.
+- Re-verified against macp-runtime v0.9.0 by a live run.
+  `crates/macp-auth` changed only additively (`authenticates_senders`); JWT
+  claim, alg and JWKS handling are unchanged. `scripts/e2e-runtime.sh` passes
+  against `ghcr.io/multiagentcoordinationprotocol/macp-runtime:0.9.0` (same
+  image as `:0.9`) for RS256 and ES256 accept, the garbage-bearer reject, and a
+  new probe that an ambient Signal sent with a minted RS256 token reaches
+  `WatchSignals` with `sender_authenticated = true`. Run on both the
+  sibling-checkout and network-fetch proto paths; against `:0.8.8` the new probe
+  fails as documented (`sender_authenticated = false`).
+- `scripts/e2e-runtime.sh`: proto pin moved to `proto-v0.1.11` (macp-runtime
+  0.9.0's macp-proto pin), and the default `MACP_RUNTIME_IMAGE` moved from
+  `:latest` to `:0.9`, since `:latest` tracks runtime `main` rather than the
+  newest release (see `DECISIONS.md`).
 - Re-verified against macp-runtime v0.8.8 (`crates/macp-auth` last changed in
   v0.7.1, so no verifier-side drift; `scripts/e2e-runtime.sh` not re-run for
   0.8.8), macp-sdk-typescript v0.14.1, macp-sdk-python v0.14.1 and

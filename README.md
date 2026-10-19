@@ -78,12 +78,15 @@ node scripts/smoke.js http://localhost:3200   # black-box check of a running ins
 
 `scripts/e2e-runtime.sh` mints RS256 and ES256 tokens and verifies them against a
 real macp-runtime container (requires Docker + `grpcurl`; not wired into
-`npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`.
+`npm test`). It also asserts a garbage bearer is rejected with `UNAUTHENTICATED`,
+and that an ambient Signal sent with a minted token reaches `WatchSignals` with
+`sender_authenticated = true` (needs runtime >= 0.9.0).
 See the script header for the manual stale-cache-grace probe.
 
 The script resolves `macp.v1.MACPRuntimeService` client-side from the versioned
 `.proto` schema rather than gRPC reflection, so it works against the default published
-`ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest` image. Rationale and
+`ghcr.io/multiagentcoordinationprotocol/macp-runtime:0.9` image (override with
+`MACP_RUNTIME_IMAGE`). Rationale and
 `.proto` sourcing: `ASSUMPTIONS.md` / `DECISIONS.md` and the script header. In CI, the offline `src/contract.spec.ts`
 wire-shape test is the load-bearing contract check.
 
