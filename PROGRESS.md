@@ -1,6 +1,6 @@
 # Progress — absorb-runtime-v0.8.1
 
-Repo map gathered while writing `plans/absorb-runtime-v0.8.1.md`. `/implement` should read this
+Repo map gathered while writing `plans/archive/absorb-runtime-v0.8.1.md`. `/implement` should read this
 instead of re-scanning the repo from scratch.
 
 **PR strategy:** one PR at the end, covering all three phases. All three phases are docs/comment-only,
@@ -139,7 +139,7 @@ branch for a readable history and a real restore point.
 - `scripts/e2e-runtime.sh` — opt-in Docker-based e2e script from the v0.5.0 pass's T7; header
   comments name the runtime version at lines 4, 11, 17, 24 — **Phase 1 target** (lines 4, 17 are
   exact-version claims; 11, 24 already use the `>= 0.5.0` floor phrasing and are left alone).
-- `plans/absorb-runtime-v0.5.0.md` — the prior absorb plan, **fully executed** (its T1–T7 all landed:
+- `plans/archive/absorb-runtime-v0.5.0.md` — the prior absorb plan, **fully executed** (its T1–T7 all landed:
   HS256 doc purge, JWKS latency guidance, rotation-under-stale-grace guidance, the `kid`/`alg`/`use`
   test in `src/keys.spec.ts`, runtime-wiring env-var additions, dev-mode gate corrections, and the
   `scripts/e2e-runtime.sh` e2e script). Used as the template for this plan's structure and citation
@@ -209,7 +209,7 @@ entry and `ASSUMPTIONS.md`'s updated status.
 
 ## Progress — e2e-runtime-proto-resolution (2026-09-25)
 
-Repo map gathered while writing `plans/e2e-runtime-proto-resolution.md` — see that plan's own
+Repo map gathered while writing `plans/archive/e2e-runtime-proto-resolution.md` — see that plan's own
 "Repo map" section for the full file/line inventory (`scripts/e2e-runtime.sh`'s existing structure,
 `../macp-runtime`'s Cargo/build.rs proto wiring, the schema repo's proto layout and public-repo
 status, the sibling Node repo's GitHub-Packages consumption pattern this plan deliberately avoids).
@@ -231,7 +231,7 @@ splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that p
   in the file content, `shellcheck` clean, quoting verified safe including space-containing paths.
   One non-blocking finding: `MACP_PROTO_VERSION` was unsanitized before use in the fetch URL,
   letting `curl`'s path normalization redirect the fetch to an arbitrary repo/ref. Closed
-  immediately (see `plans/e2e-runtime-proto-resolution.md`'s Phase 1 status note and
+  immediately (see `plans/archive/e2e-runtime-proto-resolution.md`'s Phase 1 status note and
   `DECISIONS.md`'s addendum) rather than deferred, since the fix was one line and had zero risk to
   the passing paths — verified live both ways after the fix.
 - Regression: `npm run lint`, `npm run typecheck`, `npm test` (54/54) green, both before and after
@@ -247,7 +247,7 @@ splitting — same reasoning as the `fix/e2e-runtime-auth-probe` PR (#32) that p
   (`ASSUMPTIONS.md`, `DECISIONS.md`, this file, the plan itself) are all updated in this same
   commit — no separate finalization commit needed.
 - Files touched: `scripts/e2e-runtime.sh`, `README.md`, `docs/integration.md`, `CHANGELOG.md`,
-  `ASSUMPTIONS.md`, `DECISIONS.md`, `plans/e2e-runtime-proto-resolution.md`, `PROGRESS.md`.
+  `ASSUMPTIONS.md`, `DECISIONS.md`, `plans/archive/e2e-runtime-proto-resolution.md`, `PROGRESS.md`.
 - What's next: commit, then `/ship` (push, PR, CI watch, squash-merge).
 - `/ship` verification gate: fresh Opus subagent, full `git diff main...HEAD` — **PASS**, one cosmetic
   nit (script header still said "v0.8.1 verifier" after README dropped that version-specific

@@ -4,7 +4,7 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
 
 ## 2026-09-23 — e2e-runtime.sh's grpcurl calls depend on reflection the runtime doesn't expose
 
-- **Plan:** plans/absorb-runtime-v0.8.1.md
+- **Plan:** plans/archive/absorb-runtime-v0.8.1.md
 - **Original assumption** (`ASSUMPTIONS.md`, logged during `/implement`): the runtime's missing
   gRPC reflection support was of unknown origin — possibly a deliberate hardening choice (→ file an
   issue asking for it back) or possibly something this repo's own script should route around by
@@ -97,7 +97,7 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
 
 ## 2026-09-25 — Close the deferred follow-up: stop depending on reflection at all
 
-- **Plan:** `plans/e2e-runtime-proto-resolution.md`
+- **Plan:** `plans/archive/e2e-runtime-proto-resolution.md`
 - **Trigger:** the session owner asked whether any pending tasks/plans/issues remained; the
   default-image gap tracked above (2026-09-23 entry) was the one real item found. Ran a full
   `/plan` → review → `/implement` cycle rather than a quick patch, since the fix touches how the
@@ -183,5 +183,5 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
   reproducible; the default needs a bump at each runtime minor release, alongside the proto pin.
 - **Rejected:** keeping `:latest` (unreproducible, proto/image skew possible).
 - **Decided by:** the repo owner (asked directly, 2026-10-19), during the macp-runtime 0.9.0
-  alignment (`plans/macp-runtime-0.9.0-alignment.md`, open question 1). Reverses the image choice
+  alignment (`plans/archive/macp-runtime-0.9.0-alignment.md`, open question 1). Reverses the image choice
   in the 2026-09-25 entry; everything else in that entry stands.

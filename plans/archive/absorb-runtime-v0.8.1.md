@@ -11,7 +11,7 @@ Ground truth verified against (all as siblings under `/Users/Shared/multiagentco
 
 ## Context
 
-The last cross-repo absorb pass (`plans/absorb-runtime-v0.5.0.md`, fully executed — see its T1–T7
+The last cross-repo absorb pass (`plans/archive/absorb-runtime-v0.5.0.md`, fully executed — see its T1–T7
 land in `CLAUDE.md`, `src/contract.spec.ts`, `src/keys.spec.ts`, `scripts/e2e-runtime.sh`, and the
 `docs/` rotation/latency/config-surface guidance it produced) pinned auth-service's contract to
 **macp-runtime v0.5.0** specifically. All four sibling repos have since shipped substantial work:
@@ -79,12 +79,12 @@ still satisfies them and rewriting them adds no information.
   make it factually false.
 - `CHANGELOG.md` — add a new `[Unreleased] > Changed` entry: "Re-verified against macp-runtime
   v0.8.1, macp-control-plane v0.3.0, macp-sdk-typescript v0.11.0, and macp-sdk-python v0.9.1 — no
-  wire-contract or behavior drift found; see `plans/absorb-runtime-v0.8.1.md`."
+  wire-contract or behavior drift found; see `plans/archive/absorb-runtime-v0.8.1.md`."
 
 **Approach:** a straight re-pin, not a rewrite — every fact these comments assert (struct shape,
 allowlist, `kid` behavior) was independently re-confirmed against the current sibling source in this
 plan's Context, so the edit is "same claim, current version number," never a guess forward from the
-old text. This is the same low-risk pattern `plans/absorb-runtime-v0.5.0.md`'s T4 used successfully.
+old text. This is the same low-risk pattern `plans/archive/absorb-runtime-v0.5.0.md`'s T4 used successfully.
 
 **Edge cases & failure modes:** none — these are comments and a markdown line; nothing here changes
 run-time behavior. The only failure mode is human: re-pinning a version number *without* having
@@ -95,7 +95,7 @@ rather than asserting "should still be fine."
 - `grep -rn "v0\.5\.0" src/ README.md scripts/` returns exactly one hit —
   `scripts/e2e-runtime.sh:17`'s `"the v0.5.0 gate change"` provenance parenthetical, which stays
   forever and is not a target of this phase. (CHANGELOG.md's historical `[Unreleased]` entry from
-  the prior pass and `plans/absorb-runtime-v0.5.0.md` are separately exempt for the same reason —
+  the prior pass and `plans/archive/absorb-runtime-v0.5.0.md` are separately exempt for the same reason —
   historical record, not rewritten.)
 - `grep -rn "v0\.8\.1" src/contract.spec.ts src/keys.spec.ts README.md scripts/e2e-runtime.sh` finds
   the new pins.
@@ -312,7 +312,7 @@ rediscover during an incident.
    `docs/deployment.md:292` still states "Supported algorithms: RS256, ES256, HS256" with no opt-in
    caveat — inconsistent with its own code (`security.rs:295-316`, HS256 only via explicit
    `MACP_AUTH_JWT_ALGS` opt-in) and its own CHANGELOG. This was already flagged as a cross-repo note
-   in `plans/absorb-runtime-v0.5.0.md`'s risk section two releases ago and is still present at
+   in `plans/archive/absorb-runtime-v0.5.0.md`'s risk section two releases ago and is still present at
    v0.8.1, so raising it now (rather than re-discovering it at the next absorb pass) is the right
    call on the merits — filing a GitHub issue is a low-cost, easily-reversible ask. **This is
    routed to you rather than auto-filed**, because posting to another repo's public issue tracker is
