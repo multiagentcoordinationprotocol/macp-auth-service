@@ -3,7 +3,7 @@
 Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
 
 ## e2e-runtime.sh's grpcurl calls depend on reflection the current runtime image doesn't expose
-- **Plan:** plans/absorb-runtime-v0.8.1.md
+- **Plan:** plans/archive/absorb-runtime-v0.8.1.md
 - **Assumed:** `scripts/e2e-runtime.sh` (written and passing during the prior `absorb-runtime-v0.5.0`
   pass) still works unmodified against a current published runtime image.
 - **Chose:** Ran it live against `ghcr.io/multiagentcoordinationprotocol/macp-runtime:latest`
@@ -55,7 +55,7 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
   *any* bearer, valid or garbage, once past the reflection error, and could never actually have
   proven acceptance/rejection. Fixed by retargeting both to `ListSessions`, which checks auth first
   (`src/server.rs:1274-1278`).
-  **Remaining gap closed 2026-09-25** (`plans/e2e-runtime-proto-resolution.md`): the script no
+  **Remaining gap closed 2026-09-25** (`plans/archive/e2e-runtime-proto-resolution.md`): the script no
   longer depends on reflection at all — `expect_accept`/`expect_reject` resolve
   `macp.v1.MACPRuntimeService` client-side via `grpcurl -import-path`/`-proto`, sourcing the three
   needed `.proto` files (`envelope.proto`, `core.proto`, `policy.proto` — the exact set

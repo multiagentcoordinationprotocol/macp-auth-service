@@ -264,7 +264,7 @@ doc edits triggered by this phase.
   `Initialize`/`ListSessions`/`Send`/etc. Nothing here detects that drift
   automatically. This is the same class of manual-sync obligation this repo
   already carries for its runtime-version re-verification passes
-  (`plans/absorb-runtime-v0.5.0.md` → `plans/absorb-runtime-v0.8.1.md`), just at
+  (`plans/archive/absorb-runtime-v0.5.0.md` → `plans/archive/absorb-runtime-v0.8.1.md`), just at
   the granularity of one script instead of the whole service — not a new kind of
   risk, and not proportionate to automate for an opt-in dev script whose failure
   mode is "a clear grpcurl error," never a silent false pass.
