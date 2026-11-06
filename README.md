@@ -90,6 +90,18 @@ The script resolves `macp.v1.MACPRuntimeService` client-side from the versioned
 `.proto` sourcing: `ASSUMPTIONS.md` / `DECISIONS.md` and the script header. In CI, the offline `src/contract.spec.ts`
 wire-shape test is the load-bearing contract check.
 
+### MACP knowledge base (org members only)
+
+**For MACP org members:** agents working in this repo can query the MACP knowledge
+base through the `macp-kb` MCP server. Setup instructions are in the private
+`macp-docs` repo (README, "MCP server"). Answers cite the source repo and commit, so
+check freshness with `kb_status` before relying on one.
+
+The hosted endpoint needs a bearer token that is shared only inside the org. Ask an
+org maintainer for it, export it in your shell as `MACP_KB_MCP_TOKEN`, and reference
+it from your MCP config as `${MACP_KB_MCP_TOKEN}` so the token is never stored in
+the config file. Outside contributors can ignore this section.
+
 ## Docker
 
 ```bash
