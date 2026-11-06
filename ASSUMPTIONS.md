@@ -75,4 +75,6 @@ Logged per `/implement`'s standing constraints. Reconciled via `/reconcile`.
 - **Chose:** recorded "re-verified" in CHANGELOG by source inspection only; `scripts/e2e-runtime.sh` was not re-run against 0.8.8.
 - **Alternatives:** run the e2e script (needs Docker + grpcurl).
 - **Blast radius if wrong:** a changelog claim; no code affected.
-- **Status:** UNCONFIRMED
+- **Status:** SUPERSEDED (2026-11-06). The script was later run live against runtime 0.9.0
+  (PR #41, `5270353`: `ALL CHECKS PASSED` on `:0.9` and `:0.9.0`), which replaces the 0.8.8
+  claim. See `DECISIONS.md`, 2026-11-06.

@@ -185,3 +185,17 @@ Durable record of `/reconcile` outcomes. Append-only, one entry per reconciled a
 - **Decided by:** the repo owner (asked directly, 2026-10-19), during the macp-runtime 0.9.0
   alignment (`plans/archive/macp-runtime-0.9.0-alignment.md`, open question 1). Reverses the image choice
   in the 2026-09-25 entry; everything else in that entry stands.
+
+## 2026-11-06 — Runtime 0.8.8 re-verification: superseded by the live 0.9.0 e2e
+
+- **Original assumption** (`ASSUMPTIONS.md`, "Runtime 0.8.8 re-verification scope"): the CHANGELOG
+  recorded macp-runtime v0.8.8 as "re-verified" by source inspection only;
+  `scripts/e2e-runtime.sh` was not re-run against 0.8.8.
+- **Evidence:** PR #41 (`5270353`, macp-runtime 0.9.0 alignment) ran the script live. It ended
+  `ALL CHECKS PASSED` against `macp-runtime:0.9` and `:0.9.0` with `proto-v0.1.11`, covering
+  RS256 accept, ES256 accept, garbage-bearer reject and `sender_authenticated = true`. The e2e
+  default image is now `:0.9` (2026-10-19 entry), so 0.8.8 is no longer a target.
+- **Chosen:** mark the assumption SUPERSEDED. Re-running against 0.8.8 has no value now that a
+  later release line has passed the live probe. The CHANGELOG line is historical and stays as is.
+- **Decided by:** Opus (this `/reconcile` pass), agreed by the leader session. Reversible log
+  entry with no code impact, so it was not escalated.
