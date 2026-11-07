@@ -1,0 +1,16 @@
+# Keys deploy/doppler-sync.sh pushes from Doppler (macp-auth-service/prd)
+# into the Railway service macp-auth-service (project macp-scenario-runner).
+# Doppler owns exactly these; the script never touches any other Railway
+# variable and never deletes one. The service has no Railway variable
+# references or RAILWAY_* variables today; if one is added, leave it out of
+# this list.
+
+# config
+MACP_AUTH_AUDIENCE
+MACP_AUTH_DEFAULT_TTL_SECONDS
+MACP_AUTH_ISSUER
+MACP_AUTH_MAX_TTL_SECONDS
+PORT
+
+# secret
+MACP_AUTH_SIGNING_KEY_JSON

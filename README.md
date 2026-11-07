@@ -60,11 +60,31 @@ generates an ephemeral keypair that changes on every restart. Key generation and
 rotation: [Deployment › Signing key generation](docs/deployment.md#signing-key-generation)
 and [Operations › Key rotation](docs/operations.md#key-rotation).
 
+### Secrets and configuration (Doppler)
+
+Doppler is the source of truth. The project is `macp-auth-service`:
+
+| Config | Holds |
+|---|---|
+| `dev` | Local development values (the `.env.example` defaults; no signing key, so an ephemeral one) |
+| `dev_personal` | Your own overrides of `dev` |
+| `stg` | `prd`'s non-secret config only; there is no Railway staging environment yet |
+| `prd` | The hosted service's Railway variables (project `macp-scenario-runner`, service `macp-auth-service`), signing key included |
+
+To change the hosted service, edit Doppler `macp-auth-service/prd`, then:
+
+```bash
+deploy/doppler-sync.sh           # dry run: key names, changed/unchanged
+deploy/doppler-sync.sh --apply   # push the changed keys, then redeploy
+```
+
+The script manages only the keys in [deploy/doppler-keys.txt](deploy/doppler-keys.txt). It never deletes a Railway variable and never touches a Railway reference (`${{service.VAR}}`) or a `RAILWAY_*` variable. It pipes values from Doppler to Railway without printing them, and refuses to run on a dirty tree. Railway holds no Doppler token. Rotating the signing key is still the procedure in [Operations › Key rotation](docs/operations.md#key-rotation); Doppler is where the new key goes.
+
 ## Development
 
 ```bash
 npm install          # one-time
-npm run dev          # ts-node (no auto-reload)
+npm run dev          # ts-node (no auto-reload); doppler run -- npm run dev for the dev config
 npm test             # jest — unit + HTTP integration via supertest
 npm run test:coverage
 npm run build        # compile to dist/
