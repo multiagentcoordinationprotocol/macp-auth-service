@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-07
+
+**Major version** because an existing production deployment of 1.0.0 that upgrades
+without configuration changes will refuse to start, and existing callers of
+`POST /tokens` get `401` until they send the new key. Both are incompatible
+changes to the deployed contract, not additive configuration.
+
+### Upgrading from 1.0.0
+
+- **New required env var `TOKEN_ISSUER_KEYS`** (production). A comma-separated
+  list of shared secrets allowed to mint tokens. With `NODE_ENV=production` (the
+  image default) the service **refuses to boot** without it, logging
+  `TOKEN_ISSUER_KEYS is required when NODE_ENV=production`. Dev/test
+  (`NODE_ENV` unset or not `production`) still boot without it, with
+  `POST /tokens` open as before.
+- **`POST /tokens` returns `401`** unless the caller sends one of those keys as
+  `Authorization: Bearer <key>`. Configure every minter before upgrading:
+  - macp-control-plane and macp-playground: set `MACP_AUTH_SERVICE_API_KEY` to
+    one of the `TOKEN_ISSUER_KEYS` values.
+  - Any other minter (SDK-based orchestrators, scripts): add the
+    `Authorization` header.
+- Rotation: list the new and old keys together in `TOKEN_ISSUER_KEYS`, move the
+  callers to the new key, then drop the old one.
+- Unchanged: `GET /healthz` and `GET /.well-known/jwks.json` need no key, and
+  the JWT claim shape the runtime verifies is unchanged.
+- Optional new env var `MACP_AUTH_SIGNING_ALG` (`RS256` default, or `ES256`).
+  Invalid values stop startup.
+
 ### Security
 
 - `POST /tokens` now requires a shared token-issuer key when `TOKEN_ISSUER_KEYS`

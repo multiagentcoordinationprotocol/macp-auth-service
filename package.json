@@ -1,6 +1,6 @@
 {
   "name": "macp-auth-service",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "JWT-minting identity service for the MACP runtime (RFC-MACP-0004 §4).",
   "main": "dist/index.js",
   "scripts": {

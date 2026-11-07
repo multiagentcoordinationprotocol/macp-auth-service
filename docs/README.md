@@ -1,6 +1,6 @@
 # MACP auth-service Documentation
 
-**Version**: v1.0.0 | **Protocol**: MACP 1.0 | **Language**: TypeScript (Node 20+)
+**Version**: v2.0.0 | **Protocol**: MACP 1.0 | **Language**: TypeScript (Node 20+)
 
 The MACP auth-service is the reference identity provider for the [Multi-Agent Coordination Protocol](https://www.multiagentcoordinationprotocol.io). It is a small, stateless Express service that mints short-lived JWTs (RS256 by default, or ES256) for agents so they can authenticate directly to the MACP runtime over gRPC. It implements the identity-provider side of direct-agent-auth as described in [RFC-MACP-0004 §4](https://github.com/multiagentcoordinationprotocol/multiagentcoordinationprotocol/blob/main/rfcs/RFC-MACP-0004-security.md).
 
