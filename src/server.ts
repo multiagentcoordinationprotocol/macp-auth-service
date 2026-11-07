@@ -1,4 +1,5 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import * as jose from 'jose';
 import type { AuthServiceConfig } from './config';
 import type { SigningMaterial } from './keys';
@@ -24,6 +25,45 @@ export interface MintResponseBody {
   expires_in_seconds: number;
 }
 
+function digest(value: string): Buffer {
+  return createHash('sha256').update(value, 'utf8').digest();
+}
+
+/**
+ * True when `presented` equals one of `keys`. Both sides are hashed first so `timingSafeEqual`
+ * always compares equal-length buffers (no length leak), and every key is compared so the time
+ * taken does not reveal which one matched.
+ */
+export function matchesIssuerKey(presented: string, keys: readonly string[]): boolean {
+  const candidate = digest(presented);
+  let matched = false;
+  for (const key of keys) {
+    matched = timingSafeEqual(candidate, digest(key)) || matched;
+  }
+  return matched;
+}
+
+/**
+ * Gate for credential-minting routes. With no keys configured (dev/test only — production
+ * refuses to boot, see `assertProductionConfig`) it lets every request through.
+ */
+function requireIssuerKey(keys: readonly string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (keys.length === 0) {
+      next();
+      return;
+    }
+    const header = req.headers.authorization ?? '';
+    const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : '';
+    if (presented.length === 0 || !matchesIssuerKey(presented, keys)) {
+      res.setHeader('WWW-Authenticate', 'Bearer realm="macp-auth-service"');
+      res.status(401).json({ error: 'missing or invalid token-issuer key' });
+      return;
+    }
+    next();
+  };
+}
+
 /**
  * Build the Express app with its routes bound to a specific configuration
  * + signing material. Kept pure (no env reads, no listen) so tests can drive
@@ -32,17 +72,6 @@ export interface MintResponseBody {
  */
 export function createApp(config: AuthServiceConfig, signing: SigningMaterial): Express {
   const app = express();
-  app.use(express.json());
-
-  // express.json() throws a SyntaxError with status 400 on malformed bodies;
-  // without this handler Express renders it as an HTML error page.
-  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-    if (err instanceof SyntaxError && (err as { status?: number }).status === 400) {
-      res.status(400).json({ error: 'invalid JSON body' });
-      return;
-    }
-    next(err);
-  });
 
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ ok: true });
@@ -52,7 +81,9 @@ export function createApp(config: AuthServiceConfig, signing: SigningMaterial): 
     res.json(signing.jwks);
   });
 
-  app.post('/tokens', async (req: Request, res: Response) => {
+  // The key check runs before body parsing, so an unauthenticated caller learns nothing about
+  // request validation.
+  app.post('/tokens', requireIssuerKey(config.tokenIssuerKeys), express.json(), async (req: Request, res: Response) => {
     const body = req.body as Partial<MintRequestBody> | undefined;
 
     if (!body || typeof body.sender !== 'string' || body.sender.trim().length === 0) {
@@ -92,6 +123,17 @@ export function createApp(config: AuthServiceConfig, signing: SigningMaterial): 
       expires_in_seconds: ttl,
     };
     res.json(response);
+  });
+
+  // express.json() throws a SyntaxError with status 400 on malformed bodies;
+  // without this handler Express renders it as an HTML error page. It must be
+  // registered after the routes because the parser now runs per route.
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof SyntaxError && (err as { status?: number }).status === 400) {
+      res.status(400).json({ error: 'invalid JSON body' });
+      return;
+    }
+    next(err);
   });
 
   return app;

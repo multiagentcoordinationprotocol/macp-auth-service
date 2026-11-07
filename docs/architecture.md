@@ -17,7 +17,8 @@ Everything else — the specific library choices (`express`, `jose`), the file l
 
 ```
 src/
-  config.ts      — loadConfigFromEnv(): parses env into an AuthServiceConfig
+  config.ts      — loadConfigFromEnv(): parses env into an AuthServiceConfig;
+                   assertProductionConfig(): refuses NODE_ENV=production without TOKEN_ISSUER_KEYS
   keys.ts        — loadKey(): returns SigningMaterial from env JWK or ephemeral gen
   server.ts      — createApp(config, signing): pure Express app factory
   index.ts       — main(): wires config + keys + app + listen + graceful shutdown
@@ -26,10 +27,10 @@ src/
 
 The split between `config`, `keys`, `server`, and `index` is the central architectural decision. It is not accidental and should not be collapsed.
 
-- `config.ts` is the only place that reads `MACP_AUTH_*` / `PORT` env vars (other than `index.ts` reading nothing). `loadConfigFromEnv(env)` takes the env as a parameter with a default of `process.env`, so tests can pass a synthetic environment.
+- `config.ts` is the only place that reads `MACP_AUTH_*` / `TOKEN_ISSUER_KEYS` / `NODE_ENV` / `PORT` env vars (other than `index.ts` reading nothing). `loadConfigFromEnv(env)` takes the env as a parameter with a default of `process.env`, so tests can pass a synthetic environment.
 - `keys.ts` knows nothing about HTTP or Express. It takes a JWK string (or `undefined`) and returns `{ privateKey, jwks, source }`. Tests can feed it a fixed JWK and get a deterministic key back.
 - `server.ts` exports `createApp(config, signing)` — a pure function that builds an `Express` app bound to the given config and signing material. It never calls `.listen()`, never reads `process.env`, and never touches the filesystem.
-- `index.ts` is the only file that owns side effects: it calls `loadConfigFromEnv()`, `loadKey()`, `createApp()`, `.listen()`, and wires `SIGTERM` / `SIGINT` handlers.
+- `index.ts` is the only file that owns side effects: it calls `loadConfigFromEnv()`, `assertProductionConfig()`, `loadKey()`, `createApp()`, `.listen()`, and wires `SIGTERM` / `SIGINT` handlers.
 
 This split means tests construct a real Express app with a real RSA key, round-trip real HTTP, and assert real JWT signatures — without opening a network socket or depending on the environment. `server.spec.ts` is the reference for this pattern. Two suites deliberately go beyond it: `integration.spec.ts` binds a real socket on an ephemeral port and verifies tokens via `jose.createRemoteJWKSet` (an actual network JWKS fetch — the runtime's consumption path), and `contract.spec.ts` pins the exact `macp_scopes` wire shape the runtime's Rust structs deserialize. `scripts/smoke.js` covers the last gap: a dependency-free black-box check of a *running* instance, used by CI against both the compiled build and the Docker image.
 
@@ -57,9 +58,13 @@ Returns the pre-computed JWKS from `SigningMaterial.jwks`. This object is built 
 
 ```
 request
-  → express.json middleware
-      (a malformed body throws here; a dedicated error handler converts it
-       to 400 {"error":"invalid JSON body"} instead of Express's HTML page)
+  → requireIssuerKey (when TOKEN_ISSUER_KEYS is non-empty)
+      (Authorization: Bearer <key>, sha256 both sides + timingSafeEqual
+       against every key; otherwise 401 before the body is read)
+  → express.json middleware (per route)
+      (a malformed body throws here; an error handler registered after the
+       routes converts it to 400 {"error":"invalid JSON body"} instead of
+       Express's HTML page)
   → validate body.sender (non-empty, non-whitespace string)
   → validate body.scopes (plain object when present — not a string/array/null)
   → resolve ttl (body.ttl_seconds ?? config.defaultTtlSeconds)
@@ -143,7 +148,7 @@ There are deliberately no fallbacks. If the key is broken, the service exits rat
 
 Two observables leave the process:
 
-- **Stdout logs.** `index.ts` prints five `[auth-service]` lines on startup (port, issuer/audience, key source, JWKS URL, mint URL) and one line on shutdown. The service does not log per-request — adding an access log is a deployment-time concern handled by the reverse proxy.
+- **Stdout logs.** `index.ts` prints six `[auth-service]` lines on startup (port, issuer/audience, key source, JWKS URL, mint URL, and whether `POST /tokens` requires a token-issuer key) and one line on shutdown. The service does not log per-request — adding an access log is a deployment-time concern handled by the reverse proxy.
 - **HTTP status codes.** `GET /healthz` returns 200 always-on; the orchestrator's probe treats the first successful response after start as "ready."
 
 The service does not emit metrics. If you need Prometheus counters (mint count, mint latency, error rate), add a `prom-client` registry in a thin wrapper; the hooks are straightforward because `createApp` is pure.

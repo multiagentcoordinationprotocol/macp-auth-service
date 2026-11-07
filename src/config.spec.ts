@@ -1,4 +1,4 @@
-import { loadConfigFromEnv } from './config';
+import { assertProductionConfig, loadConfigFromEnv } from './config';
 
 describe('loadConfigFromEnv', () => {
   it('returns defaults when env is empty', () => {
@@ -11,6 +11,7 @@ describe('loadConfigFromEnv', () => {
       defaultTtlSeconds: 300,
       signingAlg: 'RS256',
       signingKeyJson: undefined,
+      tokenIssuerKeys: [],
     });
   });
 
@@ -39,5 +40,27 @@ describe('loadConfigFromEnv', () => {
   it('rejects an unsupported signingAlg', () => {
     expect(() => loadConfigFromEnv({ MACP_AUTH_SIGNING_ALG: 'HS256' })).toThrow(/RS256 or ES256/);
     expect(() => loadConfigFromEnv({ MACP_AUTH_SIGNING_ALG: 'none' })).toThrow(/RS256 or ES256/);
+  });
+
+  it('parses TOKEN_ISSUER_KEYS as a trimmed, comma-separated list', () => {
+    expect(loadConfigFromEnv({ TOKEN_ISSUER_KEYS: ' k1 , k2,,' }).tokenIssuerKeys).toEqual(['k1', 'k2']);
+    expect(loadConfigFromEnv({ TOKEN_ISSUER_KEYS: ' , ' }).tokenIssuerKeys).toEqual([]);
+  });
+});
+
+describe('assertProductionConfig', () => {
+  it('refuses to boot in production without TOKEN_ISSUER_KEYS', () => {
+    const cfg = loadConfigFromEnv({});
+    expect(() => assertProductionConfig(cfg, { NODE_ENV: 'production' })).toThrow(/TOKEN_ISSUER_KEYS is required/);
+  });
+
+  it('boots in production with a key', () => {
+    const cfg = loadConfigFromEnv({ TOKEN_ISSUER_KEYS: 'k1' });
+    expect(() => assertProductionConfig(cfg, { NODE_ENV: 'production' })).not.toThrow();
+  });
+
+  it.each([undefined, 'development', 'test'])('allows no key when NODE_ENV=%s', (nodeEnv) => {
+    const cfg = loadConfigFromEnv({});
+    expect(() => assertProductionConfig(cfg, { NODE_ENV: nodeEnv })).not.toThrow();
   });
 });

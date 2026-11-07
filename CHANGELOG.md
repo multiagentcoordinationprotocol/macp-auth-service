@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `POST /tokens` now requires a shared token-issuer key when `TOKEN_ISSUER_KEYS`
+  is set: callers send one of its comma-separated keys as
+  `Authorization: Bearer <key>`, compared in constant time and checked before the
+  body is parsed (401 otherwise). With `NODE_ENV=production` (the image default)
+  the service refuses to start without a key. Dev/test keep working with it
+  empty. `/healthz` and the JWKS are unchanged. Callers: control-plane and
+  playground (`MACP_AUTH_SERVICE_API_KEY`).
+
 ### Added
 
 - `MACP_AUTH_SIGNING_ALG` (`RS256` default, or `ES256`) to select the signature

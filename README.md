@@ -126,7 +126,8 @@ the config file. Outside contributors can ignore this section.
 
 ```bash
 docker build -t macp-auth-service:local .
-docker run --rm -p 3200:3200 macp-auth-service:local
+# The image runs NODE_ENV=production, so it needs a token-issuer key to start.
+docker run --rm -p 3200:3200 -e TOKEN_ISSUER_KEYS=local-dev-issuer-key macp-auth-service:local
 curl http://localhost:3200/healthz
 ```
 
@@ -148,8 +149,11 @@ Full documentation lives under [`docs/`](docs/README.md):
 
 ## Security notes
 
-**`POST /tokens` has no client authentication** — anyone who can reach it can mint a
-token for any `sender`. Keep it on a trusted network or front it with mTLS / an
-authenticating proxy; see [`SECURITY.md`](SECURITY.md) and the
+**`POST /tokens` requires a shared token-issuer key** (`TOKEN_ISSUER_KEYS`, presented as
+`Authorization: Bearer <key>`). With `NODE_ENV=production` (the Docker image's default) the
+service refuses to start without one; in dev/test an empty value leaves minting open. The key
+is a gate, not an identity: any holder can still mint for any `sender`, so keep it to the
+orchestrators that mint (control-plane, playground) and keep the service on a private network;
+see [`SECURITY.md`](SECURITY.md) and the
 [Production checklist](docs/deployment.md#production-checklist). Supply
 `MACP_AUTH_SIGNING_KEY_JSON` from a secret store in any shared environment.

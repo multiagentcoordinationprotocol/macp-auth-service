@@ -1,9 +1,10 @@
-import { loadConfigFromEnv } from './config';
+import { assertProductionConfig, loadConfigFromEnv } from './config';
 import { loadKey } from './keys';
 import { createApp } from './server';
 
 async function main(): Promise<void> {
   const config = loadConfigFromEnv();
+  assertProductionConfig(config);
   const signing = await loadKey(config.signingKeyJson, config.signingAlg);
   const app = createApp(config, signing);
 
@@ -13,6 +14,11 @@ async function main(): Promise<void> {
     console.log(`[auth-service] key source: ${signing.source} alg: ${signing.alg}`);
     console.log(`[auth-service] JWKS: http://localhost:${config.port}/.well-known/jwks.json`);
     console.log(`[auth-service] Mint: POST http://localhost:${config.port}/tokens`);
+    if (config.tokenIssuerKeys.length === 0) {
+      console.warn('[auth-service] TOKEN_ISSUER_KEYS is empty: POST /tokens accepts unauthenticated callers (dev/test only)');
+    } else {
+      console.log(`[auth-service] POST /tokens requires a token-issuer key (${config.tokenIssuerKeys.length} configured)`);
+    }
   });
 
   const shutdown = (sig: string): void => {

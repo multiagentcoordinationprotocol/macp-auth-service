@@ -67,9 +67,15 @@ jobs:
 
       - name: Smoke-test image
         run: |
-          docker run -d --name smoke -p 3200:3200 macp-auth-service:smoke
+          # The image runs NODE_ENV=production, so it must refuse to boot without a key...
+          if docker run --rm macp-auth-service:smoke >/tmp/nokey.log 2>&1; then
+            echo "image booted without TOKEN_ISSUER_KEYS"; exit 1
+          fi
+          grep -q 'TOKEN_ISSUER_KEYS is required' /tmp/nokey.log || { cat /tmp/nokey.log; exit 1; }
+          # ...and enforce it when given one.
+          docker run -d --name smoke -p 3200:3200 -e TOKEN_ISSUER_KEYS=smoke-issuer-key macp-auth-service:smoke
           trap 'docker logs smoke; docker rm -f smoke >/dev/null' EXIT
-          node scripts/smoke.js http://localhost:3200
+          SMOKE_TOKEN_ISSUER_KEY=smoke-issuer-key node scripts/smoke.js http://localhost:3200
           # The Dockerfile HEALTHCHECK must also converge to healthy.
           for i in $(seq 1 30); do
             status="$(docker inspect -f '{{.State.Health.Status}}' smoke)"
