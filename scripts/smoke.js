@@ -10,14 +10,21 @@
  *   3. POST /tokens mints a JWT whose signature verifies against the served JWKS
  *      (RS256 and ES256), with the expected sub/iss/aud/exp claims
  *   4. Validation rejects a missing sender and malformed JSON with 400 + JSON errors
+ *   5. With SMOKE_TOKEN_ISSUER_KEY set (the instance runs with that key in
+ *      TOKEN_ISSUER_KEYS): POST /tokens without it, or with a wrong one, is 401
  *
- * Usage: node scripts/smoke.js [base-url]   (default http://localhost:3200)
+ * Usage: [SMOKE_TOKEN_ISSUER_KEY=...] node scripts/smoke.js [base-url]   (default http://localhost:3200)
  */
 const crypto = require('node:crypto');
 
 const BASE_URL = process.argv[2] || 'http://localhost:3200';
 const WAIT_ATTEMPTS = 30;
 const WAIT_DELAY_MS = 500;
+const ISSUER_KEY = process.env.SMOKE_TOKEN_ISSUER_KEY || '';
+const MINT_HEADERS = {
+  'content-type': 'application/json',
+  ...(ISSUER_KEY ? { authorization: `Bearer ${ISSUER_KEY}` } : {}),
+};
 
 function fail(msg) {
   console.error(`[smoke] FAIL: ${msg}`);
@@ -73,7 +80,7 @@ async function main() {
 
   const mintRes = await fetch(`${BASE_URL}/tokens`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: MINT_HEADERS,
     body: JSON.stringify({ sender: 'smoke-test', scopes: { can_start_sessions: true }, ttl_seconds: 60 }),
   });
   if (!mintRes.ok) fail(`POST /tokens returned ${mintRes.status}`);
@@ -96,20 +103,35 @@ async function main() {
 
   const badSender = await fetch(`${BASE_URL}/tokens`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: MINT_HEADERS,
     body: JSON.stringify({}),
   });
   if (badSender.status !== 400) fail(`missing sender: expected 400, got ${badSender.status}`);
 
   const badJson = await fetch(`${BASE_URL}/tokens`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: MINT_HEADERS,
     body: '{"sender": ',
   });
   if (badJson.status !== 400) fail(`malformed JSON: expected 400, got ${badJson.status}`);
   const badJsonBody = await badJson.json().catch(() => fail('malformed JSON error is not JSON'));
   if (!badJsonBody.error) fail('malformed JSON error body has no "error" field');
   pass('validation rejects missing sender and malformed JSON with 400 + JSON errors');
+
+  if (ISSUER_KEY) {
+    for (const [label, headers] of [
+      ['no key', { 'content-type': 'application/json' }],
+      ['wrong key', { 'content-type': 'application/json', authorization: 'Bearer wrong-key' }],
+    ]) {
+      const res = await fetch(`${BASE_URL}/tokens`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ sender: 'smoke-test' }),
+      });
+      if (res.status !== 401) fail(`${label}: expected 401, got ${res.status}`);
+    }
+    pass('POST /tokens rejects a missing or wrong token-issuer key with 401');
+  }
 
   console.log('[smoke] ALL CHECKS PASSED');
 }

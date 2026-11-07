@@ -82,6 +82,15 @@ curl -sS http://localhost:3200/.well-known/jwks.json | jq .
 
 Mints a signed JWT (RS256 by default, or ES256 when `MACP_AUTH_SIGNING_ALG=ES256`) for the requested `sender` with the supplied scopes and TTL. The returned token can be presented as a gRPC `Authorization: Bearer <token>` header to the MACP runtime.
 
+**Authentication.** When `TOKEN_ISSUER_KEYS` is set (required with `NODE_ENV=production`), the caller must send one of its keys as `Authorization: Bearer <token-issuer-key>`. A missing or wrong key gets `401` with `WWW-Authenticate: Bearer` before the body is parsed. Keys are compared in constant time. `/healthz` and the JWKS stay public.
+
+```bash
+curl -X POST http://localhost:3200/tokens \
+  -H "Authorization: Bearer $TOKEN_ISSUER_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"sender":"agent://risk","scopes":{"can_start_sessions":true}}'
+```
+
 **Request body**
 
 ```json
@@ -169,6 +178,7 @@ The service returns plain JSON errors with an `error` field. Only the validation
 
 | Status | Body | Cause |
 |--------|------|-------|
+| `401` | `{"error":"missing or invalid token-issuer key"}` | `TOKEN_ISSUER_KEYS` is set and the request has no `Authorization: Bearer <key>` header, or the key is not one of them. Checked before the body. |
 | `400` | `{"error":"invalid JSON body"}` | Body is not parseable JSON. |
 | `400` | `{"error":"sender is required"}` | Body missing, or `sender` absent / empty / whitespace-only / not a string. |
 | `400` | `{"error":"scopes must be an object"}` | `scopes` present but not a JSON object (e.g. a string, array, or `null`). |

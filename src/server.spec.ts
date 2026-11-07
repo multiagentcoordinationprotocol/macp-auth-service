@@ -1,6 +1,6 @@
 import request from 'supertest';
 import * as jose from 'jose';
-import { createApp } from './server';
+import { createApp, matchesIssuerKey } from './server';
 import { loadKey, SigningMaterial } from './keys';
 import { AuthServiceConfig } from './config';
 
@@ -12,6 +12,7 @@ function testConfig(overrides: Partial<AuthServiceConfig> = {}): AuthServiceConf
     maxTtlSeconds: 3600,
     defaultTtlSeconds: 300,
     signingAlg: 'RS256',
+    tokenIssuerKeys: [],
     ...overrides,
   };
 }
@@ -219,6 +220,68 @@ describe('auth-service HTTP surface', () => {
       });
       expect(protectedHeader.alg).toBe('ES256');
       expect(payload.sub).toBe('ec-agent');
+    });
+  });
+
+  describe('POST /tokens with TOKEN_ISSUER_KEYS', () => {
+    const keyed = () => createApp(testConfig({ tokenIssuerKeys: ['old-key', 'new-key'] }), signing);
+
+    it.each([
+      ['no Authorization header', undefined],
+      ['an empty bearer', 'Bearer '],
+      ['a wrong key', 'Bearer not-a-key'],
+      ['a key without the Bearer scheme', 'new-key'],
+      ['a prefix of a valid key', 'Bearer new-'],
+    ])('returns 401 for %s', async (_label, authorization) => {
+      const req = request(keyed()).post('/tokens');
+      if (authorization !== undefined) req.set('Authorization', authorization);
+      const res = await req.send({ sender: 'mallory', scopes: { can_start_sessions: true } });
+      expect(res.status).toBe(401);
+      expect(res.headers['www-authenticate']).toMatch(/^Bearer/);
+      expect(res.body).toEqual({ error: 'missing or invalid token-issuer key' });
+      expect(res.body.token).toBeUndefined();
+    });
+
+    it('checks the key before parsing the body (no validation detail leaks)', async () => {
+      const res = await request(keyed())
+        .post('/tokens')
+        .set('content-type', 'application/json')
+        .send('{"sender": ');
+      expect(res.status).toBe(401);
+    });
+
+    it.each(['old-key', 'new-key'])('mints with configured key %s (rotation overlap)', async (key) => {
+      const res = await request(keyed()).post('/tokens').set('Authorization', `Bearer ${key}`).send({ sender: 'alice' });
+      expect(res.status).toBe(200);
+      expect(res.body.sender).toBe('alice');
+    });
+
+    it('still validates the body once authenticated', async () => {
+      const app = keyed();
+      const missing = await request(app).post('/tokens').set('Authorization', 'Bearer new-key').send({});
+      expect(missing.status).toBe(400);
+      const malformed = await request(app)
+        .post('/tokens')
+        .set('Authorization', 'Bearer new-key')
+        .set('content-type', 'application/json')
+        .send('{"sender": ');
+      expect(malformed.status).toBe(400);
+      expect(malformed.body).toEqual({ error: 'invalid JSON body' });
+    });
+
+    it('leaves /healthz and the JWKS public', async () => {
+      const app = keyed();
+      expect((await request(app).get('/healthz')).status).toBe(200);
+      expect((await request(app).get('/.well-known/jwks.json')).status).toBe(200);
+    });
+  });
+
+  describe('matchesIssuerKey', () => {
+    it('matches only exact keys', () => {
+      expect(matchesIssuerKey('a', ['a'])).toBe(true);
+      expect(matchesIssuerKey('b', ['a', 'b'])).toBe(true);
+      expect(matchesIssuerKey('ab', ['a'])).toBe(false);
+      expect(matchesIssuerKey('a', [])).toBe(false);
     });
   });
 

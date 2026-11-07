@@ -18,7 +18,7 @@ The service sits between three kinds of consumer in a typical MACP deployment:
 
 The service is stateless by design. It holds exactly one keypair in memory for its lifetime (RSA for RS256, or EC P-256 for ES256), maintains no database, issues no refresh tokens, and keeps no revocation list. Short TTLs and key rotation are the mitigations for compromised tokens. In development the service generates an ephemeral keypair on start; in any shared environment you provide `MACP_AUTH_SIGNING_KEY_JSON` so the key survives restarts and the runtime's JWKS cache stays stable.
 
-The mint endpoint is intentionally open-by-default: anyone who can reach the port can mint a token for any `sender`. That model assumes a trusted intra-cluster network. Deployments that expose the service more widely front it with mTLS, an authenticating reverse proxy, or a shared-secret `Authorization` check — see [Deployment](deployment.md) and [Operations](operations.md).
+The mint endpoint requires a shared token-issuer key (`TOKEN_ISSUER_KEYS`, sent as `Authorization: Bearer <key>`), and production refuses to start without one. Any key holder can mint for any `sender`, so the model still assumes a private network with only the orchestrators holding the key. Deployments that expose the service more widely add mTLS or an authenticating reverse proxy — see [Deployment](deployment.md) and [Operations](operations.md).
 
 ## Documentation
 

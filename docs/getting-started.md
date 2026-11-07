@@ -47,9 +47,10 @@ You should see:
 [auth-service] key source: ephemeral alg: RS256
 [auth-service] JWKS: http://localhost:3200/.well-known/jwks.json
 [auth-service] Mint: POST http://localhost:3200/tokens
+[auth-service] TOKEN_ISSUER_KEYS is empty: POST /tokens accepts unauthenticated callers (dev/test only)
 ```
 
-The `key source: ephemeral` line is the signal that you did not provide `MACP_AUTH_SIGNING_KEY_JSON`. That is fine for local development; it is never correct in production.
+The `key source: ephemeral` line is the signal that you did not provide `MACP_AUTH_SIGNING_KEY_JSON`, and the `TOKEN_ISSUER_KEYS is empty` line means anyone who can reach the port can mint. Both are fine for local development; neither is ever correct in production. The `curl` examples below assume that open local mode; with `TOKEN_ISSUER_KEYS` set, add `-H "Authorization: Bearer <key>"`.
 
 ### Production server
 
@@ -62,6 +63,9 @@ In production the service requires a pinned signing key so it survives restarts 
 export MACP_AUTH_SIGNING_KEY_JSON='{"kty":"RSA","kid":"prod-key-1",...}'
 export MACP_AUTH_ISSUER=auth.example.com
 export MACP_AUTH_AUDIENCE=macp-runtime
+# Required with NODE_ENV=production: callers send it as `Authorization: Bearer <key>`
+export TOKEN_ISSUER_KEYS="$(openssl rand -hex 32)"
+export NODE_ENV=production
 npm run build && npm start
 ```
 

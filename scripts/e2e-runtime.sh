@@ -166,6 +166,10 @@ resolve_proto_dir() {
 # We run it on the host (simplest for an ephemeral-key run) and point the
 # runtime at host.docker.internal so its JWKS fetch reaches us.
 # ---------------------------------------------------------------------------
+# Throwaway token-issuer key for this run, so the mint below takes the same
+# authenticated path production does (TOKEN_ISSUER_KEYS).
+E2E_ISSUER_KEY="e2e-$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
+
 start_auth() {
   local alg="$1"
   log "starting auth-service (alg=${alg}) on :${AUTH_PORT}"
@@ -173,6 +177,7 @@ start_auth() {
   MACP_AUTH_ISSUER="${ISSUER}" \
   MACP_AUTH_AUDIENCE="${AUDIENCE}" \
   PORT="${AUTH_PORT}" \
+  TOKEN_ISSUER_KEYS="${E2E_ISSUER_KEY}" \
     node "$(dirname "$0")/../dist/index.js" >/tmp/${AUTH_NAME}.log 2>&1 &
   AUTH_PID=$!
   for _ in $(seq 1 30); do
@@ -224,6 +229,7 @@ start_runtime() {
 mint() {
   curl -fsS -X POST "http://127.0.0.1:${AUTH_PORT}/tokens" \
     -H 'content-type: application/json' \
+    -H "Authorization: Bearer ${E2E_ISSUER_KEY}" \
     -d '{"sender":"agent://e2e","scopes":{"can_start_sessions":true}}' \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).token))'
 }

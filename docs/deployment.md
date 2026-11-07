@@ -10,7 +10,7 @@ Before exposing the auth-service to production traffic, confirm these five items
 
 2. **Issuer and audience alignment.** `MACP_AUTH_ISSUER` and `MACP_AUTH_AUDIENCE` on the auth-service must match the runtime's `MACP_AUTH_ISSUER` and `MACP_AUTH_AUDIENCE`. A mismatch is the single most common cause of `JWTClaimValidationFailed` errors in integrations.
 
-3. **Front it with auth.** The `POST /tokens` endpoint has no client authentication. Put the service behind mTLS, an authenticating reverse proxy, or a shared-secret `Authorization` check before anything outside your trust boundary can reach it.
+3. **Token-issuer key.** Set `TOKEN_ISSUER_KEYS` from your secret store and give the same value to each minter (the control-plane and the playground read it as `MACP_AUTH_SERVICE_API_KEY`). With `NODE_ENV=production` the service refuses to start without it. The key gates *who may mint*, not *what they may mint*: a holder can still request any `sender` and scopes, so keep the service on a private network as well, and add mTLS or a proxy if anything outside your trust boundary can reach it.
 
 4. **TLS termination.** The service speaks plain HTTP. Run it behind a TLS-terminating proxy (nginx, Envoy, cloud load balancer). Tokens on the wire must be TLS-protected; the JWKS itself is public but should still be served over HTTPS so verifiers can trust the key distribution channel.
 
@@ -27,6 +27,8 @@ Before exposing the auth-service to production traffic, confirm these five items
 | `MACP_AUTH_DEFAULT_TTL_SECONDS` | `300` | no | TTL applied when the request omits `ttl_seconds`. |
 | `MACP_AUTH_SIGNING_ALG` | `RS256` | no | Signature algorithm: `RS256` (RSA) or `ES256` (EC P-256). The runtime accepts either. An unsupported value fails startup. |
 | `MACP_AUTH_SIGNING_KEY_JSON` | *(ephemeral)* | **yes in prod** | Private JWK as a JSON string, matching `MACP_AUTH_SIGNING_ALG` (RSA for `RS256`, EC P-256 for `ES256`). See below for generation. |
+| `TOKEN_ISSUER_KEYS` | *(empty: minting open)* | **yes when `NODE_ENV=production`** | Comma-separated shared keys. `POST /tokens` requires one as `Authorization: Bearer <key>`. Generate with `openssl rand -hex 32`. List the old and new key together while rotating, update the callers, then drop the old one. |
+| `NODE_ENV` | `production` in the image | no | `production` makes `TOKEN_ISSUER_KEYS` mandatory at startup. |
 
 Environment variables are read by `src/config.ts` via `loadConfigFromEnv()`. No other file reads `process.env`. This means a single command with the right env applies globally; there are no per-request overrides.
 
@@ -78,7 +80,8 @@ The provided Dockerfile is multi-stage and ships a minimal runtime image.
 
 ```bash
 docker build -t macp-auth-service:local .
-docker run --rm -p 3200:3200 macp-auth-service:local
+# The image runs NODE_ENV=production, so it needs a token-issuer key to start.
+docker run --rm -p 3200:3200 -e TOKEN_ISSUER_KEYS=local-dev-issuer-key macp-auth-service:local
 curl http://localhost:3200/healthz
 ```
 
@@ -107,6 +110,7 @@ docker run -d \
   -e MACP_AUTH_AUDIENCE=macp-runtime \
   -e MACP_AUTH_MAX_TTL_SECONDS=3600 \
   -e MACP_AUTH_SIGNING_KEY_JSON="$(cat /run/secrets/signing-key.json)" \
+  -e TOKEN_ISSUER_KEYS="$(cat /run/secrets/token-issuer-key)" \
   -p 127.0.0.1:3200:3200 \
   ghcr.io/multiagentcoordinationprotocol/macp-auth-service:latest
 ```
@@ -141,6 +145,7 @@ spec:
             - name: MACP_AUTH_AUDIENCE
               value: macp-runtime
             - { name: MACP_AUTH_SIGNING_KEY_JSON, valueFrom: { secretKeyRef: { name: macp-auth-signing, key: jwk } } }
+            - { name: TOKEN_ISSUER_KEYS, valueFrom: { secretKeyRef: { name: macp-auth-issuer, key: keys } } }
           readinessProbe:
             httpGet: { path: /healthz, port: 3200 }
           livenessProbe:

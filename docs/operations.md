@@ -190,15 +190,23 @@ Check whether the runtime has `MACP_AUTH_JWKS_JSON` set:
 - If set, it takes precedence over `MACP_AUTH_JWKS_URL` (checked first) and freezes the key set at whatever was baked into that env var — rotation via the live JWKS endpoint has no effect until the inline value is updated or removed. Prefer `MACP_AUTH_JWKS_URL` alone in any deployment that rotates keys.
 - If `MACP_AUTH_JWKS_JSON` is set but malformed, the runtime registers **no** JWT resolver at all — it does not fall back to `MACP_AUTH_JWKS_URL` even if that's also configured. This can silently disable JWT authentication entirely. Check the runtime's startup logs for a JWKS-parse error whenever tokens minted here aren't being verified as expected.
 
+## Rotating the token-issuer key
+
+1. Generate a new key (`openssl rand -hex 32`) and set `TOKEN_ISSUER_KEYS=<old>,<new>` on the auth-service; redeploy.
+2. Set each minter's `MACP_AUTH_SERVICE_API_KEY` to `<new>` and redeploy them.
+3. Set `TOKEN_ISSUER_KEYS=<new>` and redeploy the auth-service.
+
+A minter holding a key the auth-service no longer lists logs `auth_mint_failure http_401` and cannot reach the runtime until fixed. Already-minted runtime JWTs stay valid until they expire.
+
 ## Abuse mitigation
 
-`POST /tokens` has no rate limit, no caller authentication by default, and no audit log. If the endpoint is reachable beyond a trusted perimeter, assume abuse is possible.
+`POST /tokens` has no rate limit and no audit log. Its only caller check is the shared token-issuer key (`TOKEN_ISSUER_KEYS`), which every minter holds and which does not restrict `sender` or scopes. If the endpoint is reachable beyond a trusted perimeter, assume abuse is possible.
 
 Recommended controls, in order of strength:
 
 1. **Network isolation.** Bind to `127.0.0.1` and front with a local reverse proxy; or deploy in a private subnet with no public ingress. This is the default assumption.
 2. **Reverse-proxy rate limiting.** `nginx limit_req`, Envoy local rate limit filter, or your API gateway's per-source quotas. Cap at what your legitimate callers need.
-3. **Caller authentication at the proxy.** mTLS, a shared-secret `Authorization` header check, or upstream OAuth. The auth-service does not perform this check itself — always put it in the proxy.
+3. **Caller authentication.** The service checks the shared token-issuer key itself. For per-caller identity, add mTLS or upstream OAuth at the proxy.
 4. **Audit logging at the proxy.** The service does not log mints. The proxy should log `{ timestamp, caller_identity, sender, scopes, ttl }` for every 2xx response. Treat these logs as security-sensitive (they reveal which identities are active).
 5. **Short TTLs.** `MACP_AUTH_MAX_TTL_SECONDS` is the ceiling on damage from a single abused mint. Tune down aggressively — legitimate callers can always re-mint.
 

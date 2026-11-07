@@ -45,6 +45,7 @@ function testConfig(overrides: Partial<AuthServiceConfig> = {}): AuthServiceConf
     maxTtlSeconds: 3600,
     defaultTtlSeconds: 300,
     signingAlg: 'RS256',
+    tokenIssuerKeys: [],
     ...overrides,
   };
 }
